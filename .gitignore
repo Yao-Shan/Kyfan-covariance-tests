@@ -1,0 +1,24 @@
+# Local editor and operating-system state.
+.DS_Store
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# Generated simulations and historical backups.
+simulation_results/
+simulation_results_rmd/
+archive/
+
+# Knitted reports, figures and intermediate rendering files.
+simulation_reproducibility/*.html
+simulation_reproducibility/*.md
+simulation_reproducibility/*_files/
+simulation_reproducibility/*_cache/
+manuscript/figures/
+*.log
+*.aux
+*.out
+*.bbl
+*.blg
+*.synctex.gz
