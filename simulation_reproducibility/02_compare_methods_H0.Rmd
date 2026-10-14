@@ -22,44 +22,53 @@ params:
 knitr::opts_chunk$set(echo = FALSE, warning = TRUE, message = FALSE, cache = FALSE)
 .slads_input_path <- normalizePath(knitr::current_input(dir = TRUE), mustWork = TRUE)
 knitr::opts_knit$set(root.dir = dirname(.slads_input_path))
+source(file.path(dirname(.slads_input_path), "R", "load_workflow.R"))
+slads_load_workflow("comparison", .slads_input_path, envir = knitr::knit_global())
 ```
 
-## 运行与输出
+## Run and outputs
 
-本文件与论文中的六方法比较一致：Ky–Fan（$k=1,3$）、LC、CLX、CZZW 和 WZZ。
-保留原有的数据生成方式、设定和各方法随机种子规则。默认运行全部 180 个设定；
-论文 Table 4 和 Appendix C 展示的是其中 $m=150$ 的部分结果。
-新的运行使用独立输出目录，不会覆盖此前的模拟结果或接续旧版检查点。
+This report compares six methods: Ky–Fan ($k=1,3$), LC, CLX, CZZW and WZZ.
+It retains the data generators, scenarios and method-specific seed rules. The default
+run covers all 180 scenarios; Table 4 and Appendix C show the $m=150$ subset.
+New runs use separate directories and do not overwrite prior results or resume older checkpoints.
 
-本文件独立包含全部模拟代码，仅需 R、`rmarkdown` 和 `knitr`，不读取旧结果、外部 R 脚本或 Zotero 文件。
-在 RStudio 打开本文件，点击 **Knit** 即运行正式比较：每个设定重复 `R=1000` 次，
-每次使用 `B=1000` 次置换／Gaussian multiplier 重抽样，显著性水平为 0.05。
-最多使用 **7 个并行工作进程，每个进程 1 个 BLAS 线程**；`workers` 可改为 1–7。
-`R` 控制 Type I error rate 的模拟精度，`B` 控制单次检验的重抽样精度，两者含义不同。
+This file sets parameters, runs the comparison and previews results. Modules in `R/`
+provide data generation, tests and checkpoints. R, `rmarkdown` and `knitr` are required;
+keep this file beside `R/`. No prior results or Zotero files are read.
+In RStudio, **Knit** runs `R=1000` replications per scenario with `B=1000`
+permutations/Gaussian multiplier draws per test at level 0.05.
+The default uses **7 workers, each with 1 BLAS thread**; `workers` accepts 1–7.
+`R` controls Monte Carlo precision of the Type I error estimate; `B` controls test calibration precision.
 
-保留 3 组 $(p,m)$、4 种协方差结构、15 个分布配对，共 **180 个设定**。
-每个设定都计算 **6 个方法结果**；完整 `summary.csv` 有 **1080 行**。
-两种固定阶数的 Ky–Fan 检验共享数据和置换分组；其余方法共享同一批数据，并使用各自的校准方法。
-本报告不画图；输出的 Wilson 区间可直接供后续绘图使用。
+The design has 3 $(p,m)$ settings, 4 covariance structures and 15 distribution pairs:
+**180 scenarios**, each with **6 methods**, giving **1080 rows** in `summary.csv`.
+The two fixed-order Ky–Fan tests share data and permutation groups. All methods share
+the same data and use their own calibration. This report exports Wilson intervals for
+later plotting; it does not generate figures.
 
-输出存放于本文件上一级的 `simulation_results/comparison/h0_<运行标识>/`：
+Outputs are saved under `simulation_results/comparison/h0_<run_id>/`, one level above this file:
 
-| 文件 | 内容 |
+| File | Contents |
 |:--|:--|
-| `summary.csv` | 每个设定 × 方法的拒绝次数、Type I error rate、MCSE、95% Wilson 区间及失败计数 |
-| `replicates.csv` | 每次重复的统计量、p 值、拒绝决策、状态、原因与随机种子 |
-| `failed_cells.csv` | 出现计算失败的设定 × 方法；没有失败时只有列名 |
-| `scenario_summaries/` | 各设定完成后立即保存的小型汇总 CSV |
-| `checkpoints/` | 每 `checkpoint_every` 次重复保存一次的续跑文件，默认 10 次 |
-| `configuration.*`, `scenario_grid.csv`, `sessionInfo.txt`, `input_*.Rmd` | 参数、设定表、运行环境与输入代码快照 |
+| `summary.csv` | Rejections, Type I error rate, MCSE, 95% Wilson intervals and failures by scenario and method |
+| `replicates.csv` | Statistics, p-values, decisions, status, reasons and seeds for each replication |
+| `failed_cells.csv` | Scenario–method cells with failures; headers only when none fail |
+| `scenario_summaries/` | CSV summaries saved as each scenario finishes |
+| `checkpoints/` | Resume files saved every `checkpoint_every` replications (default 10) |
+| `configuration.*`, `scenario_grid.csv`, `sessionInfo.txt` | Parameters, scenario grid and R environment |
+| `source_snapshot/` | Copies of this Rmd and all R dependencies |
 
-默认 `resume: true`：相同代码、科学参数及 R 版本可继续已有进度，改变进程数不会改变随机种子或生成新实验。
-修改 `R`、`B`、种子、方法代码或数据设定后会使用不同输出目录。
-内嵌引擎区域的注释与排版也参与代码校验值计算；整理后的代码会自动使用新的运行目录。
-不要同时运行两份相同参数的任务；若需要从头运行，可设 `resume: false`，新结果写入新目录。
-完整结束时生成 `COMPLETED.txt`；具体计算失败仍以 CSV 中的 `failed` 和 `status` 为准。
+With `resume: true`, matching code, scientific parameters and R version resume existing
+progress. Changing workers preserves seeds and run identity. Changing `R`, `B`, seeds,
+method code or scenarios selects a new output directory. The source hash includes the
+full Rmd and loaded R modules, so comments, formatting and report text also affect the run directory.
+Do not run identical configurations concurrently. Set `resume: false` to start fresh
+in a new directory. `COMPLETED.txt` marks a finished run; inspect CSV `failed` and `status`
+fields for computational failures.
 
-首次可先在本文件所在目录用下面命令检查环境（只运行 6 个代表性设定，**不用于评估检验水平**）：
+For an environment check, run the command below from this file's directory. It uses
+6 representative scenarios and **does not estimate test size**:
 
 ```{r smoke-command, eval=FALSE, echo=TRUE}
 rmarkdown::render(
@@ -69,804 +78,125 @@ rmarkdown::render(
 )
 ```
 
-## 数据与方法
+## Data and methods
 
-每组样本量为 $m$，两组独立、均值为零、协方差同为 $\Sigma$。
-保留 $(p,m)=(10,50),(10,150),(40,150)$，其中：
+Each independent group has size $m$, mean zero and covariance $\Sigma$.
+The settings are $(p,m)=(10,50),(10,150),(40,150)$, with:
 
-- C1：$\Sigma=I_p$。
-- C2：$\Sigma_{ij}=0.5^{|i-j|}$。
-- C3：$\Sigma=\operatorname{diag}(4,4,4,4,4,1,\ldots,1)$。
-- C4：一个 4 维块与 $(p-4)/2$ 个 2 维块；大小为 $d$ 的块为 $0.4I_d+0.6J_d$。
+- C1: $\Sigma=I_p$.
+- C2: $\Sigma_{ij}=0.5^{|i-j|}$.
+- C3: $\Sigma=\operatorname{diag}(4,4,4,4,4,1,\ldots,1)$.
+- C4: one 4-dimensional block and $(p-4)/2$ 2-dimensional blocks; a size-$d$ block is $0.4I_d+0.6J_d$.
 
-用对称正定平方根将标准化向量变换为协方差 $\Sigma$。
-标准化分布为 N（正态）、T（协方差标准化 $t_8$）、E（指数尺度正态混合）、
-G（Gamma 尺度正态混合）和 L（独立标准化 logistic 坐标）：
+The symmetric positive-definite square root maps standardized vectors to covariance
+$\Sigma$. Distributions are N (normal), T (covariance-standardized $t_8$),
+E (exponential-scale normal mixture), G (Gamma-scale normal mixture), and
+L (independent standardized logistic coordinates):
 
 $$
 Z_N=H,\quad Z_T=\sqrt{6/Q}\,H,\quad
 Z_E=\sqrt{E}\,H,\quad Z_G=\sqrt{V}\,H,
 $$
 
-其中 $H\sim N(0,I_p)$，$Q\sim\chi^2_8$，$E\sim\operatorname{Exp}(1)$，
-$V\sim\operatorname{Gamma}(3,\text{scale}=1/3)$；L 的每个坐标为 $(\sqrt3/\pi)L_0$，
-$L_0$ 服从标准 logistic 分布。
-**T、E、G 对每一个观测向量分别抽取一个新的尺度变量，该观测的所有坐标共用它**。
-例如一组 50 个观测会抽 50 个独立的 $Q$；另一组再独立抽取自己的 50 个 $Q$。
-所有分布都具有零均值与单位协方差。
+where $H\sim N(0,I_p)$, $Q\sim\chi^2_8$, $E\sim\operatorname{Exp}(1)$,
+$V\sim\operatorname{Gamma}(3,\text{scale}=1/3)$; each L coordinate is $(\sqrt3/\pi)L_0$,
+with $L_0$ standard logistic.
+**T, E and G draw a fresh scale for each observation and share it across that observation's coordinates**.
+For example, each group of 50 observations uses its own 50 independent $Q$ draws.
+All distributions have mean zero and identity covariance.
 
-配对包含 N–N、T–T、E–E、G–G、L–L，以及五种分布之间全部 10 个不同分布配对。
-所有配对均处于协方差原假设下；`exchangeable=TRUE` 标记同分布配对。
+Pairs include N–N, T–T, E–E, G–G, L–L and all 10 distinct-distribution pairs.
+All satisfy the covariance null; `exchangeable=TRUE` identifies same-distribution pairs.
 
-| CSV 方法标记 | 实现与校准 |
+| CSV method | Statistic and calibration |
 |:--|:--|
-| `KyFan_k1` | 固定 $k=1$ 的 Ky–Fan 范数；平衡随机置换，plus-one 上尾 p 值 |
-| `KyFan_k3` | 固定 $k=3$；与 $k=1$ 共用置换分组，不进行数据驱动选阶 |
-| `LC` | Li–Chen (2012)，包含均值修正项的完整 $U$ 统计量；标准正态上尾 |
-| `CLX` | Cai–Liu–Xia (2013)，标准化协方差元素差的平方最大值；Gumbel 极值校准 |
-| `CZZW` | Chang–Zhou–Zhou–Wang (2017)，标准化元素差的绝对最大值；Gaussian multiplier 校准 |
-| `WZZ` | Wang–Zhu–Zhang (2024)，偏差修正二次差异；三累积量匹配的平移／缩放卡方校准 |
+| `KyFan_k1` | Fixed $k=1$ Ky–Fan norm; balanced random permutations with a plus-one upper-tail p-value |
+| `KyFan_k3` | Fixed $k=3$; shares permutations with $k=1$, with no data-driven order selection |
+| `LC` | Li–Chen (2012), full mean-corrected $U$ statistic; standard-normal upper tail |
+| `CLX` | Cai–Liu–Xia (2013), maximum squared standardized covariance-entry difference; Gumbel calibration |
+| `CZZW` | Chang–Zhou–Zhou–Wang (2017), maximum absolute standardized entry difference; Gaussian multiplier calibration |
+| `WZZ` | Wang–Zhu–Zhang (2024), bias-corrected quadratic discrepancy; shifted/scaled chi-square calibration matching three cumulants |
 
-CZZW 与 WZZ 按作者姓氏首字母命名；LC 与 CLX 沿用原标记。
-随机种子内部仍使用历史标记 `Chang`、`Wang`，确保改名不改变随机数序列。
+CZZW and WZZ use the authors' initials; LC and CLX retain their labels.
+Seeds retain the legacy labels `Chang` and `Wang` to preserve random streams.
 
-这些设定保留用于统一比较，不意味着它们全部满足每一种方法的充分理论条件。
-例如 T、E、G 的公共尺度会引入坐标依赖，$t_8$ 不具有有限八阶矩。
-CSV 的 `applicability` 列保留这些解释；所有方法仍在全部设定上实际计算，
-超出各方法充分条件的结果用于考察稳健性，不因此获得原定理保证。
+The common design need not satisfy every method's sufficient theoretical conditions.
+Shared scales in T, E and G induce coordinate dependence, and $t_8$ lacks a finite eighth moment.
+The CSV `applicability` column records these qualifications. All methods run in every
+scenario; cases outside sufficient conditions assess robustness without a theorem guarantee.
 
-```{r load-engine, ref.label=c('embedded-data','embedded-entrywise','embedded-wang','embedded-runner'), include=FALSE}
-```
-
-## 运行结果
+## Results
 
 ```{r run-comparison, message=TRUE}
 grid <- slads_grid(params$profile)
-result <- slads_run(grid, R = params$R, B = params$B, alpha = params$alpha, seed = params$seed,
-  workers = params$workers, output_root = params$output_root, resume = params$resume, checkpoint_every = params$checkpoint_every,
-  input_path = .slads_input_path)
+result <- slads_run(
+  grid, R = params$R, B = params$B, alpha = params$alpha, seed = params$seed,
+  workers = params$workers, output_root = params$output_root,
+  resume = params$resume, checkpoint_every = params$checkpoint_every,
+  input_path = .slads_input_path
+)
 ```
 
-本次输出目录：`r result$directory`。
-本次完成 `r nrow(grid)` 个设定、`r nrow(result$summary)` 个设定与方法组合，
-每个设定重复 `r result$config$R` 次。
+Output directory: `r result$directory`.
+Completed `r nrow(grid)` scenarios and `r nrow(result$summary)` scenario–method cells,
+with `r result$config$R` replications per scenario.
 
 ```{r summary-preview}
-knitr::kable(head(result$summary[c("p", "m", "covariance", "pair", "method", "rejections", "valid",
-  "failed", "type1_error_rate", "mcse", "ci_low", "ci_high")], 12), digits = 4, caption = "CSV 预览（前 12 行；完整结果见 summary.csv）")
+preview_columns <- c(
+  "p", "m", "covariance", "pair", "method", "rejections", "valid", "failed",
+  "type1_error_rate", "mcse", "ci_low", "ci_high"
+)
+knitr::kable(
+  head(result$summary[preview_columns], 12), digits = 4,
+  caption = "First 12 rows; full results in summary.csv"
+)
 ```
 
 ```{r failures-preview}
-knitr::kable(aggregate(cbind(attempted, valid, failed) ~ method, data = result$summary, FUN = sum),
-  caption = "各方法的计算次数与失败次数")
+knitr::kable(
+  aggregate(cbind(attempted, valid, failed) ~ method, data = result$summary, FUN = sum),
+  caption = "Attempts, valid replications and failures by method"
+)
 ```
 
-`type1_error_rate`（另有同值列 `rejection_rate`）等于拒绝次数除以重复次数；
-`mcse` 为二项 Monte Carlo 标准误，`ci_low`、`ci_high` 为逐设定的 95% Wilson 区间，
-即使拒绝次数为零也使用 Wilson 公式。这些区间没有进行多重比较调整。
+`type1_error_rate` (also stored as `rejection_rate`) is rejections divided by replications.
+`mcse` is the binomial Monte Carlo standard error; `ci_low` and `ci_high` are pointwise
+95% Wilson limits, including when there are zero rejections. No multiplicity adjustment is applied.
 
-**计算失败不记作“不拒绝”**。若某个设定与方法组合发生失败，
-其主要误差率与区间置为缺失；`conditional_rejection_rate` 和 `conditional_ci_*`
-另行给出仅在成功重复中的比例与区间，不能将其混同为完整模拟的 Type I error rate。
-失败原因可在 `replicates.csv` 中按 `status != "ok"` 筛选。
+**Failures are not counted as non-rejections**. If any replication fails in a scenario–method
+cell, its primary rate and interval are `NA`. Separate `conditional_rejection_rate`
+and `conditional_ci_*` columns use valid replications only and are not the full-run
+Type I error rate. Filter `replicates.csv` by `status != "ok"` for failure reasons.
 
-## 实现说明与来源
+## Implementation and sources
 
-- 置换每次从合并的 $2m$ 个观测中均匀随机选取 $m$ 个，另一组取其补集。
-  每次重新计算各组均值与分母为 $m-1$ 的样本协方差。
-  两个固定阶数的 p 值均为 $(1+\#\{T_b\ge T_{\rm obs}\})/(B+1)$。
-- LC 使用全部二、三、四阶互异指标求和项的代数化简，保留其原始正态校准。
-  [Li and Chen (2012), Annals of Statistics](https://doi.org/10.1214/12-AOS993)。
-- CLX 与 CZZW 的协方差元素包含对角线，经验协方差采用分母 $m$。
-  CZZW 每个观测抽一个 Gaussian multiplier，并在该观测的所有协方差元素间共享它；
-  p 值为重抽样统计量大于等于观测值的次数除以 $B$，不套用置换 plus-one 修正。
-  [Cai, Liu and Xia (2013), JASA](https://doi.org/10.1080/01621459.2012.758041)，
-  [Chang et al. (2017), Biometrics](https://doi.org/10.1111/biom.12552)。
-- WZZ 的实现依据作者公开的 [arXiv:2212.12338](https://arxiv.org/abs/2212.12338)
-  （2022 年手稿，对应 2024 年期刊论文），不是已经逐式核验最终期刊排版的声明。
-  保留三累积量匹配的卡方校准；估计累积量不满足正性条件时明确记录失败，
-  不截断方差、不取绝对值，也不临时换成其他检验。
+- Each permutation samples $m$ of the pooled $2m$ observations uniformly, with the
+  complement forming the other group. Group means and sample covariances with denominator
+  $m-1$ are recomputed. Both fixed-order p-values use $(1+\#\{T_b\ge T_{\rm obs}\})/(B+1)$.
+- LC algebraically reduces all distinct-index sums of orders two, three and four,
+  retaining the original normal calibration.
+  [Li and Chen (2012), Annals of Statistics](https://doi.org/10.1214/12-AOS993).
+- CLX and CZZW include diagonal covariance entries and use empirical covariances with
+  denominator $m$. CZZW draws one Gaussian multiplier per observation, shared across
+  all its covariance entries. Its p-value is the count of resampled statistics at least
+  as large as the observed statistic divided by $B$, without a plus-one correction.
+  [Cai, Liu and Xia (2013), JASA](https://doi.org/10.1080/01621459.2012.758041),
+  [Chang et al. (2017), Biometrics](https://doi.org/10.1111/biom.12552).
+- WZZ follows the authors' public [arXiv:2212.12338](https://arxiv.org/abs/2212.12338)
+  manuscript (2022), corresponding to the 2024 journal paper. This does not claim a
+  formula-by-formula audit of the final journal version. It retains the three-cumulant
+  chi-square calibration and records failures when estimated cumulants violate positivity,
+  without truncating variances, taking absolute values or substituting another test.
 
+## Code map
 
-## 内嵌代码
+| File | Role |
+|:--|:--|
+| `R/load_workflow.R` | Workflow loading and source tracking |
+| `R/simulation_core.R` | Seeds, data generation, covariance structures and Ky–Fan permutations |
+| `R/entrywise_tests.R` | LC, CLX and CZZW statistics and calibration |
+| `R/wzz_test.R` | WZZ trace estimates and three-cumulant matching |
+| `R/comparison_runner.R` | Scenario order, six-method runs, parallel execution, checkpoints and CSV summaries |
 
-下面代码与上面的运行共用同一份定义；HTML 默认折叠，RMD 中可直接查看与修改。
-
-<!-- slads-engine-start -->
-
-```{r embedded-data, eval=FALSE, echo=TRUE}
-# Base-R engine: rows are observations; columns are variables.
-# Derive independent streams from fixed tags, never from worker order.
-slads_seed <- function(master, ...) {
-  key <- paste(..., collapse = "|")
-  h <- as.double(master%%2147483646)
-  for (v in utf8ToInt(key)) h <- (131 * h + v)%%2147483646
-  as.integer(h + 1)
-}
-
-slads_set_seed <- function(seed) {
-  RNGkind("Mersenne-Twister", "Inversion", "Rejection")
-  set.seed(seed)
-}
-
-# Covariance structures C1--C4 and the symmetric positive-definite square root.
-slads_covariance <- function(p, model = "C1") {
-  stopifnot(p >= 5L, p == as.integer(p))
-  if (model == "C1")
-    return(diag(p))
-  if (model == "C2")
-    return(0.5^abs(outer(seq_len(p), seq_len(p), "-")))
-  if (model == "C3")
-    return(diag(c(rep(4, 5), rep(1, p - 5))))
-  if (model == "C4") {
-    stopifnot(p%%2L == 0L)
-    S <- diag(p)
-    start <- 1L
-    for (d in c(4L, rep(2L, (p - 4L)/2L))) {
-      ii <- seq.int(start, length.out = d)
-      S[ii, ii] <- 0.4 * diag(d) + 0.6
-      start <- start + d
-    }
-    return(S)
-  }
-  stop("Unknown covariance model: ", model)
-}
-
-slads_sqrt <- function(Sigma) {
-  e <- eigen(Sigma, symmetric = TRUE)
-  stopifnot(min(e$values) > 0)
-  tcrossprod(sweep(e$vectors, 2L, sqrt(e$values), "*"), e$vectors)
-}
-
-# Draw standardized observations, then apply the target covariance.
-slads_draw <- function(n, law, sqrt_sigma) {
-  p <- ncol(sqrt_sigma)
-  if (law == "L") Z <- matrix(rlogis(n * p), n, p) * sqrt(3) / pi else {
-    Z <- matrix(rnorm(n * p), n, p)
-    scale <- switch(law,
-      N = rep(1, n), T = sqrt(6 / rchisq(n, 8)),
-      E = sqrt(rexp(n)), G = sqrt(rgamma(n, shape = 3, scale = 1 / 3)),
-      stop("Unknown standardized law: ", law)
-    )
-    Z <- Z * scale  # One scale per observation, shared across its coordinates.
-  }
-  Z %*% sqrt_sigma
-}
-
-# Cumulative singular values of a symmetric covariance difference.
-kyfan_curve <- function(D) cumsum(sort(abs(eigen(D, symmetric = TRUE, only.values = TRUE)$values),
-  decreasing = TRUE))
-kyfan_permutation <- function(X, Y, ks = c(1L, 3L), B = 1000L, keep_spectra = FALSE, assignments = NULL) {
-  stopifnot(is.matrix(X), is.matrix(Y), nrow(X) == nrow(Y), ncol(X) == ncol(Y), all(is.finite(X)),
-    all(is.finite(Y)))
-  m <- nrow(X)
-  p <- ncol(X)
-  ks <- sort(unique(as.integer(ks)))
-  stopifnot(m > 1L, all(ks >= 1L & ks <= p), B >= 1L)
-  Z <- rbind(X, Y)
-  # Global centering is algebraically neutral and improves numerical stability.
-  Z <- sweep(Z, 2L, colMeans(Z), "-")
-  # Reuse pooled sums/cross-products; recompute each permuted group mean.
-  total_sum <- colSums(Z)
-  total_cross <- crossprod(Z)
-  spectrum <- function(ii) {
-    A <- Z[ii, , drop = FALSE]
-    a <- colSums(A)
-    b <- total_sum - a
-    AA <- crossprod(A)
-    D <- (2 * AA - total_cross - (tcrossprod(a) - tcrossprod(b))/m)/(m - 1)
-    kyfan_curve(D)
-  }
-  observed <- spectrum(seq_len(m))
-  if (!is.null(assignments)) {
-    stopifnot(is.matrix(assignments), ncol(assignments) == m)
-    B <- nrow(assignments)
-  }
-  out <- matrix(NA_real_, B, if (keep_spectra) p else length(ks))
-  for (b in seq_len(B)) {
-    ii <- if (is.null(assignments)) sample.int(2L * m, m, replace = FALSE) else assignments[b, ]
-    if (!is.null(assignments))
-      stopifnot(!anyDuplicated(ii), all(ii >= 1 & ii <= 2 * m))
-    v <- spectrum(ii)
-    out[b, ] <- if (keep_spectra) v else v[ks]
-  }
-  chosen <- if (keep_spectra) out[, ks, drop = FALSE] else out
-  # Include ties in the upper tail. The positive sqrt(m) factor cancels.
-  pv <- (1 + colSums(sweep(chosen, 2L, observed[ks], ">=")))/(B + 1)
-  names(pv) <- paste0("k", ks)
-  list(p_value = pv, statistic = setNames(sqrt(m) * observed[ks], names(pv)), observed = observed,
-    perm = sqrt(m) * chosen, perm_spectra = if (keep_spectra) out else NULL, B = B, ks = ks)
-}
-```
-
-```{r embedded-entrywise, eval=FALSE, echo=TRUE}
-# Covariance tests reconstructed from the cited primary papers.
-# Base R only. Rows are independent observations; columns are variables.
-# No method below relabels observations or substitutes a permutation calibration.
-# Sources and implementation choices are documented within this Rmd.
-
-.slads_entry_failure <- function(status, detail) {
-  list(p_value = NA_real_, statistic = NA_real_, status = status, detail = detail)
-}
-
-.slads_entry_validate <- function(X, Y, min_n = 4L, min_p = 1L) {
-  if (!is.matrix(X) || !is.matrix(Y) || !is.numeric(X) || !is.numeric(Y))
-    return(.slads_entry_failure("invalid_input", "X and Y must be numeric matrices."))
-  if (ncol(X) != ncol(Y) || ncol(X) < min_p || nrow(X) < min_n || nrow(Y) < min_n)
-    return(.slads_entry_failure("invalid_dimensions", paste0("Equal column counts, p >= ",
-      min_p, ", and each n >= ", min_n, " are required.")))
-  if (any(!is.finite(X)) || any(!is.finite(Y)))
-    return(.slads_entry_failure("invalid_input", "Non-finite observations are not allowed."))
-  NULL
-}
-
-# An exact O(n^2 p) reduction of all order-2, order-3, and order-4 sums
-# in Li--Chen (2012), Eq. (2.1). H has zero diagonal; r is its row sum.
-# Ordered distinct-index triple sum = sum(r^2)-sum(H^2).
-# Ordered distinct-index quadruple sum = sum(H)^2-4 sum(r^2)+2 sum(H^2).
-# The full U-statistic is translation invariant, so centering is exact here.
-# This is NOT the biased first-term-only centered approximation.
-.slads_trace_square_u <- function(X, already_centered = FALSE) {
-  n <- nrow(X)
-  if (n < 4L)
-    stop("The exact trace-square U-statistic requires n >= 4.")
-  if (!already_centered)
-    X <- sweep(X, 2L, colMeans(X), "-")
-  H <- tcrossprod(X)
-  diag(H) <- 0
-  s2 <- sum(H * H)
-  r2 <- sum(rowSums(H)^2)
-  s3 <- r2 - s2
-  s4 <- sum(H)^2 - 4 * r2 + 2 * s2
-  s2/(n * (n - 1)) - 2 * s3/(n * (n - 1) * (n - 2)) + s4/(n * (n - 1) * (n - 2) * (n - 3))
-}
-
-.slads_li_components <- function(X, Y) {
-  n1 <- nrow(X)
-  n2 <- nrow(Y)
-  Xc <- sweep(X, 2L, colMeans(X), "-")
-  Yc <- sweep(Y, 2L, colMeans(Y), "-")
-  A1 <- .slads_trace_square_u(Xc, already_centered = TRUE)
-  A2 <- .slads_trace_square_u(Yc, already_centered = TRUE)
-  # Eq. (2.2), including all mean-correction terms, reduces exactly to
-  # tr(cov(X) cov(Y)); use the Gram form to avoid forming p-by-p matrices.
-  C12 <- sum(tcrossprod(Xc, Yc)^2)/((n1 - 1) * (n2 - 1))
-  list(A1 = A1, A2 = A2, C12 = C12, T = A1 + A2 - 2 * C12, n1 = n1, n2 = n2)
-}
-
-method_li <- function(X, Y) {
-  invalid <- .slads_entry_validate(X, Y)
-  if (!is.null(invalid))
-    return(invalid)
-  a <- .slads_li_components(X, Y)
-  # Cross weights follow Li--Chen (2012), p. 914, and authors' PEtests code.
-  sd0 <- 2 * a$A1/a$n2 + 2 * a$A2/a$n1
-  if (!is.finite(sd0) || sd0 <= 0 || !is.finite(a$T))
-    return(.slads_entry_failure("invalid_null_scale", "Nonpositive or non-finite Li--Chen null standard-error estimate."))
-  z <- a$T/sd0
-  list(p_value = pnorm(z, lower.tail = FALSE), statistic = z, status = "ok", detail = list(raw_statistic = a$T,
-    null_sd = sd0, A1 = a$A1, A2 = a$A2, C12 = a$C12, log_p_value = pnorm(z, lower.tail = FALSE,
-      log.p = TRUE), calibration = "upper standard-normal tail; exact U-statistic"))
-}
-
-# Residual observation-level covariance products for the upper triangle,
-# INCLUDING diagonal entries. Empirical covariance and variance use 1/n,
-# as required by Cai--Liu--Xia and Chang et al., not cov()'s 1/(n-1).
-.slads_entry_products <- function(X, Y) {
-  p <- ncol(X)
-  n1 <- nrow(X)
-  n2 <- nrow(Y)
-  ij <- which(upper.tri(matrix(0, p, p), diag = TRUE), arr.ind = TRUE)
-  Xc <- sweep(X, 2L, colMeans(X), "-")
-  Yc <- sweep(Y, 2L, colMeans(Y), "-")
-  U <- Xc[, ij[, 1L], drop = FALSE] * Xc[, ij[, 2L], drop = FALSE]
-  V <- Yc[, ij[, 1L], drop = FALSE] * Yc[, ij[, 2L], drop = FALSE]
-  sx <- colMeans(U)
-  sy <- colMeans(V)
-  U <- sweep(U, 2L, sx, "-")
-  V <- sweep(V, 2L, sy, "-")
-  denominator <- colMeans(U * U)/n1 + colMeans(V * V)/n2
-  if (any(!is.finite(denominator)) || any(denominator <= 0))
-    return(.slads_entry_failure("invalid_entry_variance",
-      "At least one tested covariance entry has zero or non-finite estimated variance; no entries were silently removed."))
-  z <- (sx - sy)/sqrt(denominator)
-  if (any(!is.finite(z)))
-    return(.slads_entry_failure("invalid_statistic", "Non-finite standardized covariance difference."))
-  list(U = U, V = V, denominator = denominator, z = z, n1 = n1, n2 = n2, p = p)
-}
-
-.slads_cai_gumbel <- function(M, p) {
-  shifted <- M - 4 * log(p) + log(log(p))
-  log_a <- -shifted/2 - log(8 * pi)/2
-  # log(1-exp(-a)), evaluated stably even for extremely small tail areas.
-  log_p <- if (log_a < -36) log_a else log(-expm1(-exp(log_a)))
-  list(p_value = exp(log_p), log_p_value = log_p, shifted = shifted)
-}
-
-method_cai <- function(X, Y) {
-  invalid <- .slads_entry_validate(X, Y, min_n = 2L, min_p = 2L)
-  if (!is.null(invalid))
-    return(invalid)
-  a <- .slads_entry_products(X, Y)
-  if (!is.null(a$status))
-    return(a)
-  M <- max(a$z^2)
-  g <- .slads_cai_gumbel(M, a$p)
-  list(p_value = g$p_value, statistic = M, status = "ok", detail = list(centered_statistic = g$shifted,
-    log_p_value = g$log_p_value, calibration = "Cai--Liu--Xia asymptotic Gumbel tail"))
-}
-
-method_chang <- function(X, Y, B = 999L, mc_plus_one = FALSE, bootstrap_batch = 200L) {
-  invalid <- .slads_entry_validate(X, Y, min_n = 2L, min_p = 2L)
-  if (!is.null(invalid))
-    return(invalid)
-  if (length(B) != 1L || !is.finite(B) || B < 1L || B > .Machine$integer.max || B != floor(B) ||
-    length(bootstrap_batch) != 1L || !is.finite(bootstrap_batch) || bootstrap_batch < 1L ||
-    bootstrap_batch > .Machine$integer.max || bootstrap_batch != floor(bootstrap_batch))
-    return(.slads_entry_failure("invalid_bootstrap_count", "B and bootstrap_batch must be positive finite integers."))
-  a <- .slads_entry_products(X, Y)
-  if (!is.null(a$status))
-    return(a)
-  B <- as.integer(B)
-  bootstrap_batch <- as.integer(bootstrap_batch)
-  observed <- max(abs(a$z))
-  # One independent Gaussian multiplier per observation; the SAME multiplier
-  # is used across all covariance entries of that observation (essential).
-  W <- rbind(a$U/a$n1, -a$V/a$n2)
-  W <- sweep(W, 2L, sqrt(a$denominator), "/")
-  boot <- numeric(B)
-  for (start in seq.int(1L, B, by = bootstrap_batch)) {
-    idx <- start:min(B, start + bootstrap_batch - 1L)
-    g <- matrix(rnorm((a$n1 + a$n2) * length(idx)), nrow = a$n1 + a$n2)
-    values <- crossprod(g, W)
-    boot[idx] <- apply(abs(values), 1L, max)
-  }
-  # The paper's empirical conditional tail is the default. A plus-one
-  # numerical convention can be requested explicitly, never silently.
-  count <- sum(boot >= observed)
-  pv <- if (isTRUE(mc_plus_one)) (count + 1)/(B + 1) else count/B
-  list(p_value = pv, statistic = observed, status = "ok", detail = list(B = B, mc_plus_one = isTRUE(mc_plus_one),
-    bootstrap_statistics = boot, calibration = "Chang et al. Gaussian multiplier bootstrap"))
-}
-```
-
-```{r embedded-wang, eval=FALSE, echo=TRUE}
-# Wang--Zhu--Zhang: implementation of the public arXiv:2212.12338 manuscript.
-.qt_validate <- function(X, Y, min_n = 4L, min_p = 1L) {
-  X <- as.matrix(X)
-  Y <- as.matrix(Y)
-  if (!is.numeric(X) || !is.numeric(Y) || ncol(X) != ncol(Y) || ncol(X) < min_p || nrow(X) <
-    min_n || nrow(Y) < min_n || any(!is.finite(X)) || any(!is.finite(Y))) {
-    stop("X and Y must be finite numeric matrices with equal columns and adequate sample sizes.")
-  }
-  list(X = X, Y = Y)
-}
-
-.qt_fail <- function(status, detail, statistic = NA_real_, ...) {
-  c(list(p_value = NA_real_, statistic = statistic, status = status, detail = detail), list(...))
-}
-
-.qt_center_gram <- function(K) {
-  sweep(sweep(K, 1L, rowMeans(K), "-"), 2L, colMeans(K), "-") + mean(K)
-}
-
-# Efficiently recover traces of the p^2 by p^2 feature covariance matrices
-# from n by n Gram matrices: vec(xx')'vec(yy') = (x'y)^2.
-.wang_trace_components <- function(X, Y) {
-  n1 <- nrow(X)
-  n2 <- nrow(Y)
-  X <- sweep(X, 2L, colMeans(X), "-")
-  Y <- sweep(Y, 2L, colMeans(Y), "-")
-  K11 <- tcrossprod(X)^2
-  K22 <- tcrossprod(Y)^2
-  K12 <- tcrossprod(X, Y)^2
-  A <- .qt_center_gram(K11)/(n1 - 1)
-  D <- .qt_center_gram(K22)/(n2 - 1)
-  B <- .qt_center_gram(K12)/sqrt((n1 - 1) * (n2 - 1))
-  a1 <- sum(diag(A))
-  d1 <- sum(diag(D))
-  list(n1 = n1, n2 = n2, statistic = mean(K11) + mean(K22) - 2 * mean(K12) - a1/n1 - d1/n2,
-    a1 = a1, d1 = d1, a2 = sum(A * A), d2 = sum(D * D), ad = sum(B * B), a3 = sum((A %*%
-      A) * A), d3 = sum((D %*% D) * D), a2d = sum((A %*% B) * B), ad2 = sum((B %*% D) *
-      B))
-}
-
-method_wang <- function(X, Y) {
-  xy <- .qt_validate(X, Y, min_n = 4L)
-  z <- .wang_trace_components(xy$X, xy$Y)
-  n1 <- z$n1
-  n2 <- z$n2
-  est2 <- function(t1, t2, n) {
-    (n - 1)^2/((n - 2) * (n + 1)) * (t2 - t1^2/(n - 1))
-  }
-  est3 <- function(t1, t2, t3, n) {
-    (n - 1)^4/((n^2 + n - 6) * (n^2 - 2 * n - 3)) * (t3 - 3 * t1 * t2/(n - 1) + 2 * t1^3/(n -
-      1)^2)
-  }
-  aa <- est2(z$a1, z$a2, n1)
-  dd <- est2(z$d1, z$d2, n2)
-  aaa <- est3(z$a1, z$a2, z$a3, n1)
-  ddd <- est3(z$d1, z$d2, z$d3, n2)
-  aad <- (n1 - 1)/((n1 - 2) * (n1 + 1)) * ((n1 - 1) * z$a2d - z$ad * z$a1)
-  add <- (n2 - 1)/((n2 - 2) * (n2 + 1)) * ((n2 - 1) * z$ad2 - z$ad * z$d1)
-  K2 <- 2 * (aa/(n1 * (n1 - 1)) + 2 * z$ad/(n1 * n2) + dd/(n2 * (n2 - 1)))
-  K3 <- 8 * ((n1 - 2) * aaa/(n1^2 * (n1 - 1)^2) + 3 * aad/(n1^2 * n2) + 3 * add/(n1 * n2^2) +
-    (n2 - 2) * ddd/(n2^2 * (n2 - 1)^2))
-  if (any(!is.finite(c(K2, K3))) || K2 <= 0 || K3 <= 0) {
-    return(.qt_fail("invalid_cumulants", paste0("The published 3-cumulant chi-square approximation requires K2 > 0 and K3 > 0; ",
-      "the unmodified estimates do not satisfy this. No truncation or fallback was used."),
-      statistic = z$statistic, cumulant2 = K2, cumulant3 = K3))
-  }
-  beta0 <- -2 * K2^2/K3
-  beta1 <- K3/(4 * K2)
-  df <- 8 * K2^3/K3^2
-  if (any(!is.finite(c(beta0, beta1, df))) || beta1 <= 0 || df <= 0) {
-    return(.qt_fail("invalid_approximation", "Non-finite 3-cumulant matching parameters.",
-      statistic = z$statistic, cumulant2 = K2, cumulant3 = K3))
-  }
-  pval <- pchisq((z$statistic - beta0)/beta1, df = df, lower.tail = FALSE)
-  list(p_value = pval, statistic = z$statistic, status = "ok",
-    detail = "Published three-cumulant matched chi-square normal-reference calibration; sample-mean centering.",
-    cumulant2 = K2, cumulant3 = K3, beta0 = beta0, beta1 = beta1, df = df)
-}
-```
-
-```{r embedded-runner, eval=FALSE, echo=TRUE}
-slads_default_methods <- c("KyFan_k1", "KyFan_k3", "LC", "CLX", "CZZW", "WZZ")
-# Public labels changed; keep historical RNG tags in both runs and checkpoints.
-slads_method_seed_token <- function(method) {
-  switch(method, CZZW = "Chang", WZZ = "Wang", method)
-}
-
-slads_method_labels <- c(KyFan_k1 = "Ky-Fan (k=1)", KyFan_k3 = "Ky-Fan (k=3)", LC = "Li-Chen (2012)",
-  CLX = "Cai-Liu-Xia (2013)", CZZW = "CZZW (2017)", WZZ = "WZZ (2024), normal-reference")
-slads_calibrations <- c(KyFan_k1 = "balanced permutation; plus-one upper-tail p", KyFan_k3 = "balanced permutation; plus-one upper-tail p",
-  LC = "upper standard-normal tail", CLX = "asymptotic Gumbel tail", CZZW = "Gaussian multiplier bootstrap; empirical upper tail count/B",
-  WZZ = "three-cumulant matched shifted/scaled chi-square; 2022 author manuscript")
-pair_levels <- c("N-N", "T-T", "E-E", "G-G", "L-L", "N-T", "N-E", "N-G", "N-L", "T-E", "T-G",
-  "T-L", "E-G", "E-L", "G-L")
-
-# Fix scenario identifiers and ordering before distributing work.
-slads_grid <- function(profile = c("manuscript", "smoke")) {
-  profile <- match.arg(profile)
-  sizes <- data.frame(p = c(10L, 10L, 40L), m = c(50L, 150L, 150L))
-  g <- do.call(rbind, lapply(seq_len(nrow(sizes)), function(i) {
-    z <- expand.grid(covariance = paste0("C", 1:4), pair = pair_levels, stringsAsFactors = FALSE)
-    z$p <- sizes$p[i]
-    z$m <- sizes$m[i]
-    z
-  }))
-  g$law_x <- substr(g$pair, 1, 1)
-  g$law_y <- substr(g$pair, 3, 3)
-  g$exchangeable <- g$law_x == g$law_y
-  g$scenario <- with(g, paste0("p", p, "_m", m, "_", covariance, "_", pair))
-  if (profile == "smoke") {
-    ids <- c("p10_m50_C1_N-N", "p10_m50_C2_N-T", "p10_m50_C3_E-E", "p10_m50_C4_N-L", "p10_m150_C2_G-L",
-      "p40_m150_C4_N-N")
-    g <- g[match(ids, g$scenario), , drop = FALSE]
-  }
-  rownames(g) <- NULL
-  stopifnot(!anyNA(g), !anyDuplicated(g$scenario))
-  g[c("scenario", "p", "m", "covariance", "pair", "law_x", "law_y", "exchangeable")]
-}
-
-slads_applicability <- function(method, g) {
-  laws <- c(g$law_x, g$law_y)
-  if (method %in% c("KyFan_k1", "KyFan_k3"))
-    return(if (g$exchangeable) "equal-law exchangeability control" else
-      "covariance-only null; finite-sample calibration/stress evaluation")
-  if (method == "LC" && any(laws %in% c("T", "E", "G")))
-    return("robustness: common-scale dependence is outside the independent-component model; t8 also lacks eighth moments")
-  if (method == "CZZW" && "T" %in% laws)
-    return("robustness: t8 lacks finite eighth moments required by the polynomial-tail sufficient condition")
-  if (method == "WZZ" && "T" %in% laws)
-    return("robustness: t8 lacks the raw eighth moments required by the quadratic-feature condition")
-  if (method == "CLX")
-    return("finite-sample calibration; tail, dependence, fourth-moment and dimension assumptions are not certified by a finite design")
-  "finite-sample calibration; remaining moment, spectral and dimension assumptions are not automatically certified"
-}
-
-# Failed or invalid p-values have missing decisions, never a non-rejection.
-slads_result_row <- function(method, res, seconds, g, alpha) {
-  status <- if (is.null(res$status)) "invalid_result" else as.character(res$status)[1]
-  pv <- if (is.null(res$p_value)) NA_real_ else as.numeric(res$p_value)[1]
-  valid_p <- length(pv) == 1L && is.finite(pv) && pv >= 0 && pv <= 1
-  if (status == "ok" && !valid_p)
-    status <- "invalid_result"
-  decision <- if (status == "ok") pv <= alpha else NA
-  detail <- if (is.character(res$detail)) paste(res$detail, collapse = "; ") else ""
-  data.frame(
-    method = method, p_value = pv,
-    statistic = if (is.null(res$statistic)) NA_real_ else as.numeric(res$statistic)[1],
-    reject = decision, status = status, detail = detail, seconds = as.numeric(seconds),
-    calibration = unname(slads_calibrations[method]),
-    applicability = slads_applicability(method, g), stringsAsFactors = FALSE
-  )
-}
-
-slads_compare_one <- function(X, Y, g, r, seed, B, alpha) {
-  # Both fixed orders use the same observations and permutation assignments.
-  slads_set_seed(slads_seed(seed, g$scenario, r, "permutation"))
-  started <- proc.time()[["elapsed"]]
-  ky <- tryCatch(kyfan_permutation(X, Y, ks = c(1L, 3L), B = B), error = function(e) list(error = conditionMessage(e)))
-  ky_seconds <- proc.time()[["elapsed"]] - started
-  rows <- lapply(slads_default_methods, function(method) {
-    slads_set_seed(slads_seed(seed, g$scenario, r, slads_method_seed_token(method)))
-    started <- proc.time()[["elapsed"]]
-    res <- tryCatch({
-      if (method %in% c("KyFan_k1", "KyFan_k3")) {
-        if (!is.null(ky$error))
-          stop(ky$error)
-        k <- if (method == "KyFan_k1") "k1" else "k3"
-        list(p_value = unname(ky$p_value[k]), statistic = unname(ky$statistic[k]), status = "ok")
-      } else switch(method,
-        LC = method_li(X, Y), CLX = method_cai(X, Y),
-        CZZW = method_chang(X, Y, B = B, mc_plus_one = FALSE), WZZ = method_wang(X, Y)
-      )
-    }, error = function(e) list(p_value = NA_real_, statistic = NA_real_, status = "error",
-      detail = conditionMessage(e)))
-    seconds <- proc.time()[["elapsed"]] - started
-    if (method %in% c("KyFan_k1", "KyFan_k3"))
-      seconds <- seconds + ky_seconds
-    slads_result_row(method, res, seconds, g, alpha)
-  })
-  rows <- do.call(rbind, rows)
-  for (nm in names(g)) rows[[nm]] <- g[[nm]]
-  rows$replicate <- as.integer(r)
-  rows$data_seed <- slads_seed(seed, g$scenario, r, "data")
-  rows$calibration_seed <- vapply(rows$method, function(method) slads_seed(seed, g$scenario,
-    r, if (method %in% c("KyFan_k1", "KyFan_k3")) "permutation" else slads_method_seed_token(method)), integer(1))
-  rows
-}
-
-slads_wilson <- function(s, n, level = 0.95) {
-  if (n < 1L)
-    return(c(NA_real_, NA_real_))
-  z <- qnorm(1 - (1 - level)/2)
-  ph <- s/n
-  denominator <- 1 + z * z/n
-  middle <- (ph + z * z/(2 * n))/denominator
-  half <- z * sqrt(ph * (1 - ph)/n + z * z/(4 * n * n))/denominator
-  c(max(0, middle - half), min(1, middle + half))
-}
-
-# Main rates require all requested repetitions; valid-only rates are reported separately.
-slads_summary <- function(raw, config) {
-  groups <- split(raw, interaction(raw$scenario, raw$method, drop = TRUE, lex.order = TRUE))
-  out <- do.call(rbind, lapply(groups, function(d) {
-    ok <- d$status == "ok" & !is.na(d$reject)
-    valid <- sum(ok)
-    rejected <- sum(d$reject[ok])
-    failed <- nrow(d) - valid
-    complete <- nrow(d) == config$R && failed == 0L
-    rate <- if (valid > 0L) rejected/valid else NA_real_
-    mcse <- if (valid > 0L) sqrt(rate * (1 - rate)/valid) else NA_real_
-    ci <- slads_wilson(rejected, valid)
-    data.frame(
-      d[1, c("scenario", "p", "m", "covariance", "pair", "law_x", "law_y", "exchangeable", "method")],
-      method_label = unname(slads_method_labels[d$method[1]]),
-      k = if (d$method[1] == "KyFan_k1") 1L else if (d$method[1] == "KyFan_k3") 3L else NA_integer_,
-      R = config$R, B = config$B, alpha = config$alpha, seed = config$seed,
-      requested = config$R, attempted = nrow(d), valid = valid, failed = failed, rejections = rejected,
-      complete = complete,
-      type1_error_rate = if (complete) rate else NA_real_,
-      rejection_rate = if (complete) rate else NA_real_,
-      mcse = if (complete) mcse else NA_real_,
-      ci_low = if (complete) ci[1] else NA_real_,
-      ci_high = if (complete) ci[2] else NA_real_, confidence_level = 0.95,
-      conditional_rejection_rate = rate, conditional_mcse = mcse,
-      conditional_ci_low = ci[1], conditional_ci_high = ci[2], calibration = d$calibration[1],
-      applicability = d$applicability[1], mean_seconds = mean(d$seconds), stringsAsFactors = FALSE,
-      row.names = NULL
-    )
-  }))
-  out <- out[order(match(out$scenario, config$grid$scenario), match(out$method, slads_default_methods)),
-    , drop = FALSE]
-  rownames(out) <- NULL
-  out
-}
-
-slads_integer <- function(x, name, minimum = 1L, maximum = .Machine$integer.max) {
-  if (length(x) != 1L || !is.numeric(x) || !is.finite(x) || x != floor(x) || x < minimum ||
-    x > maximum)
-    stop(name, " must be an integer in [", minimum, ", ", maximum, "].")
-  as.integer(x)
-}
-
-slads_hash <- function(x) {
-  f <- tempfile()
-  on.exit(unlink(f))
-  saveRDS(x, f, version = 2)
-  unname(tools::md5sum(f))
-}
-
-slads_code_hash <- function(path) {
-  lines <- readLines(path, warn = FALSE, encoding = "UTF-8")
-  a <- which(lines == "<!-- slads-engine-start -->")
-  b <- which(lines == "<!-- slads-engine-end -->")
-  if (length(a) != 1L || length(b) != 1L || a >= b)
-    stop("Embedded engine markers are missing.")
-  slads_hash(lines[seq.int(a + 1L, b - 1L)])
-}
-
-# Write temporary files beside their targets, then commit by renaming.
-slads_write_rds <- function(x, path) {
-  tmp <- tempfile(pattern = ".checkpoint-", tmpdir = dirname(path))
-  on.exit(unlink(tmp))
-  saveRDS(x, tmp, version = 2)
-  if (!file.rename(tmp, path))
-    stop("Cannot commit checkpoint: ", path)
-}
-
-slads_write_csv <- function(x, path) {
-  tmp <- tempfile(pattern = ".csv-", tmpdir = dirname(path))
-  on.exit(unlink(tmp))
-  write.csv(x, tmp, row.names = FALSE, na = "", fileEncoding = "UTF-8")
-  if (!file.rename(tmp, path))
-    stop("Cannot commit CSV: ", path)
-}
-
-# Validate scenario, RNG streams and decisions before resuming a checkpoint.
-slads_validate_checkpoint <- function(cp, g, config, signature, path) {
-  bad <- function(message) stop("Invalid checkpoint ", path, ": ", message)
-  if (!is.list(cp) || !identical(cp$signature, signature) || !identical(cp$scenario, g$scenario))
-    bad("configuration or scenario mismatch; do not mix output directories.")
-  if (!is.list(cp$repetitions) || length(cp$repetitions) > config$R)
-    bad("invalid repetition count.")
-  for (r in seq_along(cp$repetitions)) {
-    d <- cp$repetitions[[r]]
-    required <- c("method", "replicate", "scenario", "data_seed", "calibration_seed", "p_value",
-      "reject", "status", "statistic", "detail", "seconds", "calibration", "applicability",
-      names(g))
-    if (!is.data.frame(d) || !all(required %in% names(d)) || nrow(d) != length(slads_default_methods) ||
-      !identical(d$method, slads_default_methods))
-      bad(paste("incomplete method rows at repetition", r))
-    if (anyNA(d[c("replicate", "data_seed", "calibration_seed", "status")]) || any(d$replicate !=
-      r) || any(d$data_seed != slads_seed(config$seed, g$scenario, r, "data")))
-      bad(paste("repetition or seed mismatch at", r))
-    for (nm in names(g)) if (anyNA(d[[nm]]) || any(d[[nm]] != g[[nm]]))
-      bad(paste("scenario field", nm, "mismatch"))
-    expected <- vapply(d$method, function(method) slads_seed(config$seed, g$scenario, r,
-      if (method %in% c("KyFan_k1", "KyFan_k3")) "permutation" else slads_method_seed_token(method)), integer(1))
-    if (!identical(unname(d$calibration_seed), unname(expected)))
-      bad("calibration seed mismatch")
-    ok <- d$status == "ok"
-    if (any(ok & (!is.finite(d$p_value) | d$p_value < 0 | d$p_value > 1 | is.na(d$reject))) ||
-      any(!ok & !is.na(d$reject)) || any(d$reject[ok] != (d$p_value[ok] <= config$alpha)))
-      bad("inconsistent p-value/rejection/status")
-  }
-  invisible(TRUE)
-}
-
-slads_worker <- function(i, grid, config, signature, directory, resume, checkpoint_every) {
-  g <- grid[i, , drop = FALSE]
-  path <- file.path(directory, "checkpoints", paste0(g$scenario, ".rds"))
-  cp <- list(signature = signature, scenario = g$scenario, repetitions = list())
-  if (resume && file.exists(path)) {
-    cp <- tryCatch(readRDS(path), error = function(e) stop("Cannot read checkpoint ", path,
-      ": ", conditionMessage(e)))
-    slads_validate_checkpoint(cp, g, config, signature, path)
-  }
-  done <- cp$repetitions
-  root <- slads_sqrt(slads_covariance(g$p, g$covariance))
-  if (length(done) < config$R)
-    for (r in seq.int(length(done) + 1L, config$R)) {
-      slads_set_seed(slads_seed(config$seed, g$scenario, r, "data"))
-      X <- slads_draw(g$m, g$law_x, root)
-      Y <- slads_draw(g$m, g$law_y, root)
-      done[[r]] <- slads_compare_one(X, Y, g, r, config$seed, config$B, config$alpha)
-      if (r%%checkpoint_every == 0L || r == config$R) {
-        cp$repetitions <- done
-        slads_write_rds(cp, path)
-      }
-    }
-  raw <- do.call(rbind, done)
-  rownames(raw) <- NULL
-  summary <- slads_summary(raw, config)
-  slads_write_csv(summary, file.path(directory, "scenario_summaries", paste0(g$scenario, ".csv")))
-  message(g$scenario, ": ", config$R, " repetitions complete; failed evaluations = ", sum(summary$failed))
-  list(summary = summary, checkpoint = path)
-}
-
-# Stream one scenario at a time to avoid holding all replicate rows in memory.
-slads_stream_replicates <- function(paths, file) {
-  tmp <- tempfile(pattern = ".replicates-", tmpdir = dirname(file))
-  on.exit(unlink(tmp))
-  first <- TRUE
-  for (path in paths) {
-    d <- do.call(rbind, readRDS(path)$repetitions)
-    write.table(d, tmp, sep = ",", row.names = FALSE, col.names = first, append = !first,
-      quote = TRUE, na = "", fileEncoding = "UTF-8")
-    first <- FALSE
-  }
-  if (!file.rename(tmp, file))
-    stop("Cannot commit replicate-level CSV: ", file)
-}
-
-slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L, workers = 7L,
-  output_root = "../simulation_results/comparison", resume = TRUE, checkpoint_every = 10L,
-  input_path = .slads_input_path) {
-  R <- slads_integer(R, "R")
-  B <- slads_integer(B, "B", minimum = 19L)
-  seed <- slads_integer(seed, "seed", minimum = 0L, maximum = 2147483646L)
-  workers <- slads_integer(workers, "workers", maximum = 7L)
-  checkpoint_every <- slads_integer(checkpoint_every, "checkpoint_every")
-  if (length(alpha) != 1L || !is.numeric(alpha) || !is.finite(alpha) || alpha <= 0 || alpha >=
-    1)
-    stop("alpha must be strictly between zero and one.")
-  if (length(resume) != 1L || !is.logical(resume) || is.na(resume))
-    stop("resume must be TRUE or FALSE.")
-  if (length(output_root) != 1L || !is.character(output_root) || !nzchar(output_root))
-    stop("output_root must be a path.")
-  if (1/(B + 1) > alpha)
-    warning("The plus-one permutation test cannot reject at this alpha with this B.")
-  # New R workers inherit these settings before loading their BLAS runtimes.
-  Sys.setenv(OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1", VECLIB_MAXIMUM_THREADS = "1",
-    BLIS_NUM_THREADS = "1", RCPP_PARALLEL_NUM_THREADS = "1")
-  if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-    RhpcBLASctl::blas_set_num_threads(1L)
-    RhpcBLASctl::omp_set_num_threads(1L)
-  }
-  config <- list(engine = "selected-six-methods-v4", grid = grid, R = R, B = B, alpha = as.numeric(alpha),
-    seed = seed, methods = slads_default_methods, calibrations = slads_calibrations, code_hash = slads_code_hash(input_path),
-    R_version = as.character(getRversion()), platform = R.version$platform, rng = "Mersenne-Twister/Inversion/Rejection")
-  signature <- slads_hash(config)
-  run_id <- paste0("h0_", substr(signature, 1, 16))
-  if (!resume)
-    run_id <- paste0(run_id, "_fresh_", basename(tempfile(pattern = "run_")))
-  directory <- file.path(output_root, run_id)
-  for (path in c(directory, file.path(directory, "checkpoints"), file.path(directory, "scenario_summaries"))) if (!dir.exists(path) &&
-    !dir.create(path, recursive = TRUE, showWarnings = FALSE))
-    stop("Cannot create ", path)
-  directory <- normalizePath(directory, mustWork = TRUE)
-  cfgpath <- file.path(directory, "configuration.rds")
-  if (file.exists(cfgpath)) {
-    if (!identical(readRDS(cfgpath), config))
-      stop("Existing output configuration does not match: ", cfgpath)
-  } else slads_write_rds(config, cfgpath)
-  # Source snapshots are immutable and keyed by the full source-file hash.
-  source_hash <- unname(tools::md5sum(input_path))
-  snapshot <- file.path(directory, paste0("input_", source_hash, ".Rmd"))
-  if (!file.exists(snapshot) && !file.copy(input_path, snapshot))
-    stop("Cannot preserve Rmd input snapshot.")
-  slads_write_csv(grid, file.path(directory, "scenario_grid.csv"))
-  writeLines(capture.output(str(config)), file.path(directory, "configuration.txt"))
-  actual_workers <- min(workers, nrow(grid))
-  message("Output: ", directory, "\nScenarios: ", nrow(grid), "; methods: ", length(slads_default_methods),
-    "; R=", R, "; B=", B, "; workers=", actual_workers, " (one BLAS thread per worker)")
-  common <- list(grid = grid, config = config, signature = signature, directory = directory,
-    resume = resume, checkpoint_every = checkpoint_every)
-  if (actual_workers > 1L) {
-    # PSOCK also works in RStudio and on Windows; no forked GUI process.
-    cl <- parallel::makePSOCKcluster(actual_workers, outfile = file.path(directory, "workers.log"))
-    on.exit(parallel::stopCluster(cl), add = TRUE)
-    env <- environment(slads_run)
-    candidates <- ls(envir = env, all.names = TRUE)
-    # Export private helpers too; method seed aliases are required on every worker.
-    exported <- candidates[grepl("^(slads_|\\.slads_|kyfan_|method_|\\.qt_|\\.wang_|pair_levels$)",
-      candidates)]
-    parallel::clusterExport(cl, exported, envir = env)
-    answer <- do.call(parallel::parLapplyLB, c(list(cl = cl, X = seq_len(nrow(grid)), fun = slads_worker),
-      common))
-  } else answer <- do.call(lapply, c(list(X = seq_len(nrow(grid)), FUN = slads_worker), common))
-  summary <- do.call(rbind, lapply(answer, `[[`, "summary"))
-  rownames(summary) <- NULL
-  summary$run_id <- run_id
-  expected <- nrow(grid) * length(slads_default_methods)
-  if (nrow(summary) != expected || anyDuplicated(paste(summary$scenario, summary$method)))
-    stop("Unexpected number of scenario/method results.")
-  slads_write_csv(summary, file.path(directory, "summary.csv"))
-  slads_stream_replicates(vapply(answer, `[[`, character(1), "checkpoint"), file.path(directory,
-    "replicates.csv"))
-  slads_write_csv(summary[summary$failed > 0L, , drop = FALSE], file.path(directory, "failed_cells.csv"))
-  writeLines(capture.output(sessionInfo()), file.path(directory, "sessionInfo.txt"))
-  writeLines(c("Completed all requested repetitions. Inspect status/failed counts before using results.",
-    paste("run_id:", run_id), paste("failed_method_evaluations:", sum(summary$failed))),
-    file.path(directory, "COMPLETED.txt"))
-  if (any(summary$failed > 0L))
-    warning("Some methods failed: main rates/intervals are NA for these cells. See failed_cells.csv and replicates.csv.")
-  list(summary = summary, config = config, directory = directory, workers = actual_workers)
-}
-```
-
-<!-- slads-engine-end -->
+Edit YAML `params` to change replication counts or output paths. The modules document
+inputs, outputs and calibration for the tests and run management.

@@ -1,0 +1,137 @@
+---
+title: "Tables 1–3: Mean Shifts and the Ky–Fan Permutation Test"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    code_folding: hide
+params:
+  profile: "manuscript"
+  R: 500
+  B: 500
+  alpha: 0.05
+  seed: 20260925
+  workers: 7
+  mean_deltas: !r c(1, 2)
+  mean_directions: !r c("sparse", "dense")
+  common_shift: 1
+  resume: true
+  checkpoint_every: 10
+  output_root: "../simulation_results/mean_shift"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = TRUE, message = FALSE, cache = FALSE)
+.slads_input_path <- normalizePath(knitr::current_input(dir = TRUE), mustWork = TRUE)
+knitr::opts_knit$set(root.dir = dirname(.slads_input_path))
+```
+
+```{r load-engine, include=FALSE}
+source(file.path(dirname(.slads_input_path), "R", "load_workflow.R"),
+  local = knitr::knit_global())
+slads_load_workflow("mean_shift", .slads_input_path, envir = knitr::knit_global())
+```
+
+## Design
+
+This experiment checks the sensitivity of the Tables 1–3 Ky–Fan permutation test to population means, using fixed $k=1,3$. It retains $(p,m)=(10,50),(10,150),(40,150)$, C1–C4, and all 15 N/T/E/G/L distribution pairs: 180 base scenarios.
+
+Generate zero-mean samples $X_i^{(0)},Y_i^{(0)}$ with the original procedure, then set
+
+$$X_i=X_i^{(0)}+\mu_X,\qquad Y_i=Y_i^{(0)}+\mu_Y.$$
+
+Deterministic shifts preserve population covariance, so all cases satisfy $\Sigma_X=\Sigma_Y$. Let $e_1=(1,0,\ldots,0)^\top$ and $\mathbf1_p=(1,\ldots,1)^\top$.
+
+| Case | $\mu_X$ | $\mu_Y$ | Purpose |
+|:--|:--|:--|:--|
+| `baseline` | $0$ | $0$ | Zero-mean Tables 1–3 baseline |
+| `common_shift` | $c\mathbf1_p$ | $c\mathbf1_p$ | Common shift, default $c=1$ |
+| `sparse` | $0$ | $\delta e_1$ | Mean difference in the first coordinate |
+| `dense` | $0$ | $\delta\mathbf1_p/\sqrt p$ | Mean difference spread across all coordinates |
+
+Defaults use $\delta\in\{1,2\}$. Both directions have $\|\mu_Y-\mu_X\|_2=\delta$, independent of $p$. Edit `mean_deltas`, `mean_directions`, and `common_shift` in the YAML. Baseline and common-shift controls are always included; do not add 0 to `mean_deltas`. The six default mean settings produce **180 × 6 × 2 = 2160 summary rows**.
+
+Within each base scenario and replicate, mean settings share baseline samples and permutations. Sample covariances use denominator $m-1$. Each permutation selects $m$ pooled observations for one group and assigns the remainder to the other, then recomputes both sample covariances. Raw groups are pooled **without first centering them separately**, preserving the mean difference under study. The test retains the plus-one upper-tail $p$ value and rejection rule $\widehat p\leq\alpha$.
+
+A common shift preserves observed and permutation statistics up to floating-point error. Separate shifts preserve the observed statistic but can change the permutation distribution and rejection rate. **Unequal means are outside the paper's common-mean null model.** These are sensitivity checks under equal covariance, not evidence that the existing theorem covers unequal means. Identical baseline distributions with unequal means are not labeled exchangeable.
+
+## Running and outputs
+
+Knit uses the YAML defaults: $R=500$, $B=500$, and $\alpha=0.05$, with at most 7 workers and single-threaded BLAS per worker. At fixed $R$ and $B$, six mean settings require about six times the baseline test computation. Adjust `R` for rejection-rate precision and `B` for permutation precision.
+
+Rendering requires `rmarkdown`, `knitr`, and Pandoc. Keep this Rmd beside `R/` and `data/`. Shared generation and tests are in `R/simulation_core.R`; paired simulations and summaries are in `R/mean_shift_runner.R`. `R/mean_shift_reference.R` reads `data/manuscript_reference.csv`, also used by report 01. Reference counts and unrounded MCSEs are recovered from the saved rates using $R=1000$.
+
+To match the Tables 1–3 parameters, set $R=B=1000$ and retain `alpha: 0.05` and `seed: 20260925`. Setting `mean_deltas: !r c(0.5, 1, 2)` gives eight mean settings and 2880 summary rows. Knit explicitly passes all YAML parameters; direct R function defaults retain the historical configuration.
+
+Start with this smoke check to verify execution; it cannot assess type I error.
+
+```{r smoke-command, eval=FALSE, echo=TRUE}
+rmarkdown::render(
+  "03_mean_shift_sensitivity.Rmd",
+  params = list(profile = "smoke", R = 3, B = 39, workers = 1),
+  output_file = "03_mean_shift_sensitivity_smoke.html"
+)
+```
+
+Results are saved in a run directory under `../simulation_results/mean_shift/`. With default `resume: true`, checkpoints are saved every `checkpoint_every` replicates (default 10). Matching source files, scientific parameters, and R environment allow resumption. Changing `workers` affects neither seeds nor the run directory.
+
+Run identifiers hash the full Rmd, loaded R modules, and reference CSV. Editing them creates a new directory; each run preserves their directory structure in a source snapshot. Avoid concurrent runs with identical parameters. Use `resume: false` for a fresh output directory.
+
+| Output | Contents |
+|:--|:--|
+| `summary.csv` | Rejection rate, MCSE, 95% Wilson interval, and failure count by base scenario, mean setting, and $k$ |
+| `paired_vs_baseline.csv` | Rejection-rate difference from the paired zero-mean baseline and paired MCSE |
+| `translation_diagnostics.csv` | Shift effects on observed statistics, permutation statistics, and decisions |
+| `baseline_vs_tables123.csv` | New zero-mean baseline versus saved Tables 1–3 reference values |
+| `replicates.csv` | Replicate statistics, $p$ values, decisions, status, and seeds |
+| `failures.csv` | Replicates with status other than `ok`; header only if none |
+| `mean_design.csv`, `mean_vectors.csv` | Mean settings and coordinate means |
+| `checkpoints/`, `configuration.*`, source snapshot, `sessionInfo.txt` | Resume files, configuration, source files, and R environment |
+
+The paired MCSE is $\operatorname{sd}(I_{\rm shift}-I_{\rm baseline})/\sqrt R$, where $I$ is the rejection indicator for the same replicate. It differs from an independent-simulation difference standard error. Wilson intervals are per-scenario intervals without multiplicity adjustment. Failed computations are recorded, not counted as nonrejections; scenarios with failures do not report a primary rate for the full experiment. `COMPLETED.txt` marks completion of all requested replicates; also check summary `failed` counts and replicate `status`.
+
+## Results
+
+```{r run-experiment, message=TRUE}
+grid <- ms_grid(params$profile)
+result <- ms_run(grid, R = params$R, B = params$B, alpha = params$alpha, seed = params$seed,
+  workers = params$workers, mean_deltas = unlist(params$mean_deltas), mean_directions = unlist(params$mean_directions),
+  common_shift = params$common_shift, output_root = params$output_root, resume = params$resume,
+  checkpoint_every = params$checkpoint_every, input_path = .slads_input_path)
+```
+
+Output: `r result$directory`. Completed `r nrow(grid)` base scenarios and produced `r nrow(result$summary)` scenario/test results.
+
+```{r rate-preview}
+cols <- c("p", "m", "covariance", "pair", "mean_id", "method", "type1_error_rate", "mcse", "ci_low",
+  "ci_high", "failed")
+stopifnot(all(cols %in% names(result$summary)))
+knitr::kable(head(result$summary[cols], 16), digits = 4, caption = "Rejection-rate preview; full results in summary.csv")
+```
+
+```{r paired-preview}
+paired_cols <- c("p", "m", "covariance", "pair", "mean_id", "delta", "k", "paired_rate_difference",
+  "paired_mcse", "matched_valid")
+knitr::kable(head(result$paired[result$paired$mean_id != "baseline", paired_cols], 12), digits = 4,
+  caption = "Paired comparison with the zero-mean baseline (first 12 rows)")
+```
+
+```{r translation-checks}
+dc <- result$diagnostics[result$diagnostics$mean_id == "common_shift", ]
+diagnostic_preview <- data.frame(check = c("Common shift: valid permutation-sequence comparisons by k",
+  "Common shift: p-value mismatches", "Common shift: rejection-decision mismatches", "Common shift: maximum absolute permutation-statistic change",
+  "All mean settings: maximum absolute observed-statistic change"), value = c(sum(dc$common_permutation_comparisons),
+  sum(dc$common_p_value_mismatches), sum(dc$common_reject_mismatches), ms_max_finite(dc$max_common_permutation_statistic_abs_diff),
+  ms_max_finite(result$diagnostics$max_observed_statistic_abs_diff)))
+knitr::kable(diagnostic_preview, caption = "Translation checks; differences near machine precision may occur")
+```
+
+```{r baseline-reference}
+baseline_check <- ms_compare_paper_reference(result)
+write.csv(baseline_check, file.path(result$directory, "baseline_vs_tables123.csv"), row.names = FALSE,
+  na = "", fileEncoding = "UTF-8")
+knitr::kable(head(baseline_check[c("p", "m", "covariance", "pair", "method", "new_rate", "paper_rate",
+  "rate_difference", "same_simulation_parameters")], 12), digits = 4, caption = "Zero-mean baseline versus Tables 1–3 (first 12 rows)")
+```
+
+`paper_rate` contains historical reference CSV values, shown separately from new estimates. Matching simulation parameters means $R=B=1000$, $\alpha=0.05$, and seed `20260925`. Differences after changing parameters do not indicate reproduction failure. The run configuration records the R version, platform, and RNG settings.

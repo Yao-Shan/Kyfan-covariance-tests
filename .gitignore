@@ -1,24 +1,34 @@
-# Local editor and operating-system state.
-.DS_Store
+# Generated simulation outputs and figures
+/simulation_results/
+/manuscript/figures/
+/outputs/
+/output/
+*.html
+*.pdf
+*_files/
+*_cache/
+/cache/
+checkpoints/
+source_snapshot/
+
+# R session and editor state
 .Rhistory
 .RData
 .Ruserdata
 .Rproj.user/
+.Renviron
+*.Rproj
+.DS_Store
 
-# Generated simulations and historical backups.
-simulation_results/
-simulation_results_rmd/
-archive/
-
-# Knitted reports, figures and intermediate rendering files.
-simulation_reproducibility/*.html
-simulation_reproducibility/*.md
-simulation_reproducibility/*_files/
-simulation_reproducibility/*_cache/
-manuscript/figures/
+# Local working files, archives and audit artifacts
+/archive/
+/history/
+/work/
+/tmp/
+/.codex/
+/.agents/
+/UPLOAD_PLAN.txt
 *.log
-*.aux
-*.out
-*.bbl
-*.blg
-*.synctex.gz
+*.tmp
+*.bak
+*~

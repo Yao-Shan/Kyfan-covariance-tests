@@ -1,5 +1,5 @@
 ---
-title: "附录 C：Wilson 区间图复现"
+title: "Appendix C: Wilson interval plots"
 output:
   html_document:
     toc: true
@@ -8,355 +8,96 @@ params:
   figure_dir: "../manuscript/figures"
 ---
 
-本文件读取已保存的模拟汇总，生成附录 C 的 8 张 PDF 图，**不重新运行模拟**。
-程序仅选取 $m=150$、$p\in\{10,40\}$、C1–C4、15 个预设分布配对及下表中的 6 种方法，
-共 **2 × 4 × 15 × 6 = 720 个设计单元**。拒绝率和 95% Wilson 区间均从整数拒绝次数
-`rejections` 与有效重复次数 `valid` 重新计算，并在写入图形前与保存值核对。
+This report validates saved simulation summaries and Wilson intervals, then exports
+8 Appendix C PDFs. **It does not rerun simulations**. `R/appendix_plots.R` handles
+paths, validation and plotting, loaded through `R/load_workflow.R`. Keep the complete
+`simulation_reproducibility/` directory and input CSV.
 
-输出文件名为 `wilson_p10_C1.pdf` 至 `wilson_p40_C4.pdf`。
-8 张图保持附录 C 原有的分布配对顺序、面板顺序、配色和排版；横轴使用固定线性尺度：
-LC 为 0–0.28，其余方法均为 0–0.12。
+## Run and parameters
 
-## 运行与参数
-
-在项目根目录执行：
+From the project root:
 
 ```r
 rmarkdown::render("simulation_reproducibility/04_plot_appendix_C.Rmd")
 ```
 
-也可在其他工作目录中将本文件的绝对路径传给 `rmarkdown::render()`。
-YAML 中的两个路径参数也可通过 `params = list(...)` 覆盖：
+From another directory, pass this file's absolute path to `rmarkdown::render()`.
+Override YAML parameters with `params = list(...)`:
 
-| 参数 | 默认值 | 用途 |
+| Parameter | Default | Purpose |
 |:--|:--|:--|
-| `input_csv` | `../manuscript/supplementary/comparison_summary.csv` | 已保存的模拟汇总 |
-| `figure_dir` | `../manuscript/figures` | 8 张 PDF 的输出目录 |
+| `input_csv` | `../manuscript/supplementary/comparison_summary.csv` | Saved simulation summary |
+| `figure_dir` | `../manuscript/figures` | Output directory for 8 PDFs |
 
-相对路径均以项目中的 `simulation_reproducibility/` 为基准解析，与启动 R 时的工作目录无关；
-也支持绝对路径。输出目录不存在时自动创建；运行会替换其中的同名 PDF。
-HTML 报告需要 `rmarkdown`、`knitr` 和 Pandoc；计算与 PDF 绘图仅使用 R 自带功能。
-
-若只需 PDF，可在项目根目录执行以下代码，无需 Pandoc 或 HTML 报告：
-
-```r
-code_file <- tempfile(fileext = ".R")
-knitr::purl("simulation_reproducibility/04_plot_appendix_C.Rmd",
-            output = code_file, documentation = 0, quiet = TRUE)
-source(code_file)
-```
-
-通过 `purl()` 提取后运行时，工作目录应位于项目内部；程序会向上查找同时包含
-`manuscript/` 与 `simulation_reproducibility/` 的项目根目录。
-
-## 定位项目并读取数据
+Relative paths resolve from this file's `simulation_reproducibility/` directory;
+absolute paths are also accepted. Missing output directories are created, and existing
+PDFs with matching names are replaced. HTML rendering requires `rmarkdown`, `knitr`
+and Pandoc; validation and PDF plotting use base R only.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE)
-
-# Resolve paths from the project, including renders started outside it.
-# For purl()/source(), the working directory must be inside the project.
-is_absolute <- function(path) {
-  grepl("^(/|[A-Za-z]:[/\\\\]|~)", path)
-}
-
-absolute_path <- function(path, base = getwd(), must_work = FALSE) {
-  path <- path.expand(path)
-  if (!is_absolute(path)) path <- file.path(base, path)
-  normalizePath(path, winslash = "/", mustWork = must_work)
-}
-
-# Identify the Rmd, sourced script, or Rscript entry point.
-current_rmd <- tryCatch(knitr::current_input(dir = TRUE),
-                        error = function(e) character())
-source_files <- unlist(lapply(sys.frames(), function(frame) {
-  value <- frame$ofile
-  if (is.character(value)) value else character()
-}), use.names = FALSE)
-command_file <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE))
-file_candidates <- c(current_rmd, source_files, command_file)
-file_candidates <- file_candidates[nzchar(file_candidates)]
-start_dirs <- unique(c(vapply(file_candidates, function(path) {
-  dirname(absolute_path(path))
-}, character(1)), getwd()))
-
-# Search each candidate directory and its parents for the project layout.
-find_project_root <- function(start) {
-  path <- absolute_path(start)
-  repeat {
-    if (dir.exists(file.path(path, "manuscript")) &&
-        dir.exists(file.path(path, "simulation_reproducibility"))) return(path)
-    parent <- dirname(path)
-    if (identical(parent, path)) break
-    path <- parent
-  }
-  NULL
-}
-
-project_roots <- Filter(Negate(is.null), lapply(start_dirs, find_project_root))
-if (!length(project_roots)) {
-  stop("Cannot locate project root. Render this Rmd by its absolute path, ",
-       "or run the extracted R code from within the project.")
-}
-project_root <- project_roots[[1L]]
-script_dir <- file.path(project_root, "simulation_reproducibility")
-
-# Supply defaults when chunks are evaluated without a YAML parameter block.
-if (!exists("params", inherits = FALSE)) params <- list()
-if (is.null(params$input_csv)) {
-  params$input_csv <- "../manuscript/supplementary/comparison_summary.csv"
-}
-if (is.null(params$figure_dir)) params$figure_dir <- "../manuscript/figures"
-input_csv <- absolute_path(params$input_csv, script_dir, must_work = TRUE)
-figure_dir <- absolute_path(params$figure_dir, script_dir)
+.slads_input_path <- normalizePath(knitr::current_input(dir = TRUE),
+                                   winslash = "/", mustWork = TRUE)
+source(file.path(dirname(.slads_input_path), "R", "load_workflow.R"),
+  local = knitr::knit_global())
+slads_load_workflow("appendix", .slads_input_path, envir = knitr::knit_global())
+plot_spec <- appendix_plot_spec()
+plot_paths <- appendix_plot_paths(params, .slads_source_root)
 ```
 
-```{r read-data}
-summary_data <- read.csv(input_csv, stringsAsFactors = FALSE,
-                         check.names = FALSE)
-required_columns <- c("m", "p", "covariance", "pair", "method", "alpha",
-                      "rejections", "valid", "rejection_rate", "ci_low",
-                      "ci_high", "confidence_level")
-missing_columns <- setdiff(required_columns, names(summary_data))
-if (length(missing_columns)) {
-  stop("Missing required CSV columns: ", paste(missing_columns, collapse = ", "))
-}
+## Validate the design and Wilson intervals
 
-# Accept both archived (Chang, Wang) and current (CZZW, WZZ) identifiers.
-# Normalize before validating cells so mixed aliases cannot create duplicates.
-method_aliases <- c(KyFan_k1 = "KyFan_k1", KyFan_k3 = "KyFan_k3",
-                    LC = "LC", CLX = "CLX", Chang = "CZZW", CZZW = "CZZW",
-                    Wang = "WZZ", WZZ = "WZZ")
-method_order <- c("KyFan_k1", "KyFan_k3", "LC", "CLX", "CZZW", "WZZ")
-method_titles <- c("Ky-Fan (k = 1)", "Ky-Fan (k = 3)", "LC", "CLX",
-                   "CZZW", "WZZ")
-method_description <- c("Ky-Fan, order 1", "Ky-Fan, order 3",
-                        "Li and Chen (2012)", "Cai, Liu and Xia (2013)",
-                        "Chang, Zhou, Zhou and Wang (2017)",
-                        "Wang, Zhu and Zhang (2024)")
-method_table <- data.frame(Method = method_titles, Reference = method_description)
-knitr::kable(method_table, row.names = FALSE)
+Select $m=150$, $p\in\{10,40\}$, C1–C4, the 15 specified distribution pairs and
+6 methods below: **2 × 4 × 15 × 6 = 720 cells**, each appearing exactly once.
+Legacy method names `Chang` and `Wang` become `CZZW` and `WZZ` before duplicate checks.
 
-# Keep the Appendix C pair and panel order fixed across all figures.
-pair_order <- c("N-N", "T-T", "E-E", "G-G", "L-L", "N-T", "N-E", "N-G",
-                "N-L", "T-E", "T-G", "T-L", "E-G", "E-L", "G-L")
-dimensions <- c(10L, 40L)
-covariances <- paste0("C", 1:4)
-selected <- with(summary_data,
-                 m == 150 & p %in% dimensions & covariance %in% covariances &
-                 pair %in% pair_order & method %in% names(method_aliases))
-if (anyNA(selected)) stop("Missing design identifiers in the input CSV.")
-dat <- summary_data[selected, , drop = FALSE]
-dat$method <- unname(method_aliases[dat$method])
-
-# Require the complete 2 x 4 x 15 x 6 design, exactly once per cell.
-key_columns <- c("p", "covariance", "pair", "method")
-make_key <- function(x) do.call(paste, c(x[key_columns], sep = "|"))
-expected <- expand.grid(p = dimensions, covariance = covariances,
-                        pair = pair_order, method = method_order,
-                        stringsAsFactors = FALSE)
-if (anyDuplicated(make_key(dat))) stop("Duplicate selected design cells.")
-if (nrow(dat) != nrow(expected) ||
-    !setequal(make_key(dat), make_key(expected))) {
-  stop("Selected data must contain exactly 720 design cells (90 per PDF).")
-}
-if (any(!is.finite(dat$alpha)) || any(abs(dat$alpha - 0.05) > 1e-12) ||
-    any(!is.finite(dat$confidence_level)) ||
-    any(abs(dat$confidence_level - 0.95) > 1e-12)) {
-  stop("The Appendix C figures require alpha = 0.05 and confidence level = 0.95.")
-}
+```{r method-table}
+knitr::kable(plot_spec$method_table, row.names = FALSE)
 ```
 
-## 重算并核对 Wilson 区间
-
-设 $n$ 次有效重复中有 $r$ 次拒绝，记 $\widehat q=r/n$、$z=\Phi^{-1}(0.975)$。
-95% Wilson 区间为
+For $r$ rejections in $n$ valid replications, let $\widehat q=r/n$ and $z=\Phi^{-1}(0.975)$.
+The 95% Wilson interval is
 
 \[
 \frac{\widehat q+z^2/(2n)\ \pm\ z\sqrt{\widehat q(1-\widehat q)/n+z^2/(4n^2)}}
      {1+z^2/n}.
 \]
 
-分母采用 `valid` 中的有效重复次数。附录 C 的每个设计单元均应有 1,000 次有效重复，
-且无失败。以下代码核对这些条件，并检查保存的拒绝率、区间端点及可用的 MCSE 和条件汇总列；
-数值比较的绝对容差为 $10^{-10}$。若检查失败，程序将在替换 PDF 前停止。
+Each cell must have 1,000 valid replications, nominal level 0.05 and confidence level 0.95.
+If present, `B`, `failed` and `complete` must indicate 1,000 draws, zero failures and completion.
+Rejection rates, interval limits, and available MCSE and conditional summaries are checked
+against values recomputed from integer counts with absolute tolerance $10^{-10}$.
+The fixed x-axis ranges are 0–0.28 for LC and 0–0.12 for other methods; intervals outside
+these ranges raise an error. PDFs are written only after all checks pass.
 
-```{r validate-wilson}
-assert_integer_count <- function(x, name, positive = FALSE) {
-  if (any(!is.finite(x)) || any(x != floor(x)) ||
-      any(x < if (positive) 1 else 0)) {
-    stop(name, " must contain finite ", if (positive) "positive" else "nonnegative",
-         " integer counts.")
-  }
-}
-assert_integer_count(dat$valid, "valid", positive = TRUE)
-assert_integer_count(dat$rejections, "rejections")
-if (any(dat$rejections > dat$valid)) stop("Rejections exceed valid replications.")
-if (any(dat$valid != 1000L)) stop("Appendix C requires 1,000 valid replications.")
-if ("failed" %in% names(dat) && any(is.na(dat$failed) | dat$failed != 0)) {
-  stop("The archived Appendix C subset must have no failed replications.")
-}
-if ("complete" %in% names(dat) && any(is.na(dat$complete) | !dat$complete)) {
-  stop("The archived Appendix C subset must contain only complete cells.")
-}
-if ("B" %in% names(dat) && any(is.na(dat$B) | dat$B != 1000L)) {
-  stop("Appendix C requires the saved B = 1,000 design.")
-}
-
-# Recompute every plotted quantity from counts, using the 95% Wilson formula.
-z <- qnorm(0.975)
-dat$rate_recomputed <- dat$rejections / dat$valid
-denominator <- 1 + z^2 / dat$valid
-center <- (dat$rate_recomputed + z^2 / (2 * dat$valid)) / denominator
-half_width <- z * sqrt(dat$rate_recomputed * (1 - dat$rate_recomputed) /
-                        dat$valid + z^2 / (4 * dat$valid^2)) / denominator
-dat$lower_recomputed <- pmax(0, center - half_width)
-dat$upper_recomputed <- pmin(1, center + half_width)
-mcse_recomputed <- sqrt(dat$rate_recomputed * (1 - dat$rate_recomputed) /
-                          dat$valid)
-
-# Record agreement with required and optional archived summary columns.
-validation <- data.frame(column = character(), max_absolute_difference = numeric())
-check_saved <- function(column, calculated, tolerance = 1e-10) {
-  if (!column %in% names(dat)) return(invisible(NULL))
-  saved <- dat[[column]]
-  if (any(!is.finite(saved))) stop("Non-finite saved values in ", column, ".")
-  discrepancy <- max(abs(saved - calculated))
-  if (discrepancy > tolerance) {
-    stop("Saved ", column, " disagrees with counts; max difference = ",
-         format(discrepancy, digits = 6), ".")
-  }
-  validation[nrow(validation) + 1L, ] <<- list(column, discrepancy)
-}
-for (column in c("rejection_rate", "type1_error_rate", "conditional_rejection_rate")) {
-  check_saved(column, dat$rate_recomputed)
-}
-for (column in c("ci_low", "conditional_ci_low")) {
-  check_saved(column, dat$lower_recomputed)
-}
-for (column in c("ci_high", "conditional_ci_high")) {
-  check_saved(column, dat$upper_recomputed)
-}
-for (column in c("mcse", "conditional_mcse")) check_saved(column, mcse_recomputed)
-
-# Refuse to silently clip an interval against the fixed Appendix C axes.
-axis_max <- setNames(c(0.12, 0.12, 0.28, 0.12, 0.12, 0.12), method_order)
-if (any(dat$upper_recomputed > axis_max[dat$method] + 1e-12)) {
-  stop("An interval exceeds the fixed Appendix C axis limits; inspect the input.")
-}
-knitr::kable(validation, digits = 16, row.names = FALSE)
-cat("Validated", nrow(dat), "cells across", length(dimensions) * length(covariances),
-    "figures; valid replications per cell:", paste(unique(dat$valid), collapse = ", "),
-    "\n")
+```{r validate-data}
+summary_data <- read.csv(plot_paths$input_csv, stringsAsFactors = FALSE,
+                         check.names = FALSE)
+checked <- appendix_validate_summary(summary_data, plot_spec)
+knitr::kable(checked$validation, digits = 16, row.names = FALSE)
+cat("Validated", nrow(checked$data), "cells across",
+    length(plot_spec$dimensions) * length(plot_spec$covariances),
+    "figures; valid replications per cell:",
+    paste(unique(checked$data$valid), collapse = ", "), "\n")
 ```
 
-## 绘制 8 张图
+## Export 8 figures
 
-蓝色表示同分布配对，橙色表示异分布配对；竖向虚线标记名义水平 0.05，横向虚线分隔前 5 个
-同分布配对与后 10 个异分布配对。每张 PDF 含 6 个面板，按行依次为 Ky-Fan ($k=1$)、
-Ky-Fan ($k=3$)、LC、CLX、CZZW、WZZ。区间表示各设计单元的逐点 Monte Carlo 不确定性，
-不构成同时置信带。
-
-```{r plot-functions}
-draw_wilson_figure <- function(dimension, covariance, destination) {
-  grDevices::pdf(destination, width = 160 / 25.4, height = 160 / 25.4,
-                family = "Helvetica", pointsize = 9, useDingbats = FALSE,
-                title = sprintf("Wilson intervals: p=%d, m=150, %s",
-                                dimension, covariance))
-  on.exit(grDevices::dev.off(), add = TRUE)
-  colors <- c("#21618C", "#D35420")
-  y <- 16 - seq_along(pair_order)
-  row_colors <- colors[ifelse(seq_along(pair_order) <= 5, 1L, 2L)]
-  # Physical panel locations reproduce the original square six-panel layout.
-  panel_left <- c(0.061, 0.548)
-  panel_right <- c(0.498, 0.986)
-  panel_bottom <- c(0.747, 0.456, 0.165)
-  panel_top <- c(0.967, 0.676, 0.385)
-  for (i in seq_along(method_order)) {
-    row <- (i - 1L) %/% 2L + 1L
-    column <- (i - 1L) %% 2L + 1L
-    method <- method_order[i]
-    panel <- dat[dat$p == dimension & dat$covariance == covariance &
-                   dat$method == method, , drop = FALSE]
-    # Restore the prescribed row order independently of the CSV row order.
-    panel <- panel[match(pair_order, panel$pair), , drop = FALSE]
-    xmax <- axis_max[method]
-    ticks <- seq(0, xmax, length.out = if (method == "LC") 5L else 4L)
-    par(fig = c(panel_left[column], panel_right[column],
-                panel_bottom[row], panel_top[row]),
-        mar = c(0, 0, 0, 0), new = i > 1L, xaxs = "i", yaxs = "i",
-        mgp = c(0, 0.15, 0), tcl = -0.15, lend = "butt")
-    plot.new()
-    plot.window(xlim = c(-0.0025 / 0.12 * xmax, xmax * 1.025),
-                ylim = c(0.4, 15.6))
-    abline(v = ticks, col = "#E0E0E0", lwd = 0.45)
-    abline(h = y, col = "#E8E8E8", lwd = 0.4)
-    abline(v = 0.05, col = "#333333", lty = "44", lwd = 0.8)
-    abline(h = 10.5, col = "#999999", lty = "33", lwd = 0.55)
-    segments(panel$lower_recomputed, y, panel$upper_recomputed, y,
-             col = row_colors, lwd = 0.7)
-    segments(panel$lower_recomputed, y - 0.18, panel$lower_recomputed, y + 0.18,
-             col = row_colors, lwd = 0.45)
-    segments(panel$upper_recomputed, y - 0.18, panel$upper_recomputed, y + 0.18,
-             col = row_colors, lwd = 0.45)
-    points(panel$rate_recomputed, y, pch = 16, col = row_colors, cex = 0.66)
-    axis(1, at = ticks, labels = sprintf("%.2f", ticks), cex.axis = 0.78,
-         col = "#666666", col.axis = "#222222", lwd = 0.45)
-    if (column == 1L) {
-      axis(2, at = y, labels = pair_order, las = 1, tick = FALSE,
-           cex.axis = 0.78, col.axis = "#222222", hadj = 1, line = -0.2)
-    }
-    box(bty = "l", col = "#888888", lwd = 0.45)
-    mtext(sprintf("(%s) %s", letters[i], method_titles[i]), side = 3,
-          adj = 0, line = 0.12, cex = 0.96, font = 2)
-  }
-  # Separate page-level labels keep all panels the same size.
-  par(fig = c(0, 1, 0, 1), mar = c(0, 0, 0, 0), new = TRUE,
-      xaxs = "i", yaxs = "i")
-  plot.new()
-  plot.window(xlim = c(0, 1), ylim = c(0, 1))
-  text(0.54, 0.112, "Empirical Type I error rate", cex = 0.90)
-  legend_x <- c(0.064, 0.290, 0.539)
-  legend_colors <- c(colors, "#333333")
-  segments(legend_x, 0.066, legend_x + 0.030, 0.066,
-           col = legend_colors, lwd = 0.8)
-  points(legend_x + 0.015, rep(0.066, 3L), pch = 16,
-         col = legend_colors, cex = 0.66)
-  segments(c(0.539, 0.569), 0.062, c(0.539, 0.569), 0.070,
-           col = "#333333", lwd = 0.5)
-  text(legend_x + 0.042, rep(0.066, 3L),
-       c("Same distribution", "Different distributions", "95% Wilson CI"),
-       adj = 0, cex = 0.78)
-  segments(0.786, 0.056, 0.786, 0.076, col = "#333333", lty = "44", lwd = 0.8)
-  text(0.804, 0.066, "Nominal: 0.05", adj = 0, cex = 0.78)
-  text(0.54, 0.029,
-       "Axes differ by method; fixed across all eight figures.  m = 150, R = B = 1,000.",
-       cex = 0.74)
-  invisible(destination)
-}
-```
+The figures preserve Appendix C's pair order, panel order, colors and layout.
+Blue denotes same-distribution pairs; orange denotes different-distribution pairs.
+A vertical dashed line marks 0.05, and a horizontal dashed line separates the first
+5 same-distribution pairs from the last 10 different-distribution pairs. Panels run
+row-wise: Ky-Fan ($k=1$), Ky-Fan ($k=3$), LC, CLX, CZZW, WZZ. Intervals show pointwise
+Monte Carlo uncertainty, not simultaneous confidence bands.
 
 ```{r export-pdfs}
-# All input checks above must pass before any PDF is opened for writing.
-if (!dir.exists(figure_dir)) dir.create(figure_dir, recursive = TRUE)
-if (!dir.exists(figure_dir)) stop("Could not create figure directory: ", figure_dir)
-output_files <- character()
-for (dimension in dimensions) {
-  for (covariance in covariances) {
-    destination <- file.path(figure_dir,
-                             sprintf("wilson_p%d_%s.pdf", dimension, covariance))
-    draw_wilson_figure(dimension, covariance, destination)
-    output_files <- c(output_files, destination)
-  }
-}
-stopifnot(length(output_files) == 8L, all(file.exists(output_files)),
-          all(file.info(output_files)$size > 0))
+output_files <- appendix_export_pdfs(checked$data, plot_paths$figure_dir, plot_spec)
 knitr::kable(data.frame(Figure = basename(output_files),
                         Bytes = file.info(output_files)$size), row.names = FALSE)
-cat("Wrote eight vector PDFs to:", figure_dir, "\n")
+cat("Wrote eight vector PDFs to:", plot_paths$figure_dir, "\n")
 ```
 
-## 运行环境
+## R environment
 
 ```{r session-information}
 sessionInfo()
