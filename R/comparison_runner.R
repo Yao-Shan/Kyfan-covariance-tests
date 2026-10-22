@@ -109,8 +109,8 @@ slads_compare_one <- function(X, Y, g, r, seed, B, alpha) {
         k <- if (method == "KyFan_k1") "k1" else "k3"
         list(p_value = unname(ky$p_value[k]), statistic = unname(ky$statistic[k]), status = "ok")
       } else switch(method,
-        LC = method_li(X, Y), CLX = method_cai(X, Y),
-        CZZW = method_chang(X, Y, B = B, mc_plus_one = FALSE), WZZ = method_wang(X, Y)
+        LC = method_lc(X, Y), CLX = method_clx(X, Y),
+        CZZW = method_czzw(X, Y, B = B, mc_plus_one = FALSE), WZZ = method_wzz(X, Y)
       )
     }, error = function(e) list(p_value = NA_real_, statistic = NA_real_, status = "error",
       detail = conditionMessage(e)))

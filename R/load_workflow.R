@@ -26,8 +26,8 @@ slads_resolve_path <- function(path, root = .slads_source_root) {
 slads_workflow_files <- function(workflow) {
   modules <- switch(workflow,
     tables = c("simulation_core.R", "table_reproduction.R"),
-    comparison = c("simulation_core.R", "entrywise_tests.R", "wzz_test.R",
-      "comparison_runner.R"),
+    comparison = c("simulation_core.R", "test_helpers.R", "lc_test.R", "clx_test.R",
+      "czzw_test.R", "wzz_test.R", "comparison_runner.R"),
     appendix = "appendix_plots.R",
     stop("Unknown workflow: ", workflow)
   )

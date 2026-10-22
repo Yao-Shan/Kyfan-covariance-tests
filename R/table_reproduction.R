@@ -186,7 +186,7 @@ slads_summary <- function(raw, alpha = 0.05) {
 slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L,
                       workers = 1L, output_root = "outputs", resume = TRUE,
                       checkpoint_every = 10L, protected_paths = character()) {
-  # This runner produces KyFan tables; method comparisons are in 02_compare_methods_H0.Rmd.
+  # This runner produces KyFan tables; method comparisons are in reports/h0_comparison.Rmd.
   stopifnot(R >= 1L, R == as.integer(R), length(B) == 1L, is.finite(B),
     B >= 19L, B == as.integer(B), alpha > 0, alpha < 1)
   # Avoid nested BLAS/OpenMP parallelism inside the scenario workers.

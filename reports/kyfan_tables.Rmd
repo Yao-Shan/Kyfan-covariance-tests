@@ -63,23 +63,23 @@ archived results when `mode="rerun"`.
 ```{r usage, eval=FALSE}
 # Short execution check; these estimates are not manuscript results.
 rmarkdown::render(
-  "reports/01_reproduce_tables.Rmd",
+  "reports/kyfan_tables.Rmd",
   params = list(mode = "rerun", profile = "smoke", R = 20, B = 99),
-  output_file = "01_reproduce_smoke.html"
+  output_file = "kyfan_tables_smoke.html"
 )
 
 # Full manuscript experiment: 180 scenarios, k=1 and k=3, R=B=1000.
 rmarkdown::render(
-  "reports/01_reproduce_tables.Rmd",
+  "reports/kyfan_tables.Rmd",
   params = list(mode = "rerun", profile = "manuscript", R = 1000, B = 1000),
-  output_file = "01_reproduce_full.html"
+  output_file = "kyfan_tables_full.html"
 )
 
 # Extended experiment: 360 scenarios and 1,020 result cells.
 rmarkdown::render(
-  "reports/01_reproduce_tables.Rmd",
+  "reports/kyfan_tables.Rmd",
   params = list(mode = "rerun", profile = "archive", R = 1000, B = 1000),
-  output_file = "01_reproduce_extended.html"
+  output_file = "kyfan_tables_extended.html"
 )
 ```
 

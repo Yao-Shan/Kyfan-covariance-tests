@@ -1,8 +1,8 @@
 # Ky–Fan covariance tests
 
-Simulation code for two-sample covariance equality using fixed-order Ky–Fan
-permutation tests. Ordinary R scripts run the experiments; R Markdown reports
-are optional.
+Code for two-sample covariance equality using fixed-order Ky–Fan permutation
+tests. R scripts run the simulations; R Markdown reports display experiments
+or test user-supplied data.
 
 ## Files
 
@@ -14,16 +14,30 @@ reports/      Optional R Markdown reports
 results/      Generated outputs (created when needed; excluded from Git)
 ```
 
-| Script in `simulation/` | Purpose |
-|:--|:--|
-| `01_reproduce_tables.R` | Simulate the Ky–Fan results for Tables 1–3 |
-| `02_compare_methods_H0.R` | Compare Ky–Fan orders 1 and 3 with LC, CLX, CZZW, and WZZ under covariance equality |
-| `04_plot_appendix_C.R` | Validate saved comparison results and draw eight Wilson interval figures |
+| Purpose | Script in `simulation/` | Report in `reports/` |
+|:--|:--|:--|
+| Simulate the Ky–Fan results for Tables 1–3 | `kyfan_tables.R` | `kyfan_tables.Rmd` |
+| Compare Ky–Fan orders 1 and 3 with LC, CLX, CZZW, and WZZ under covariance equality | `h0_comparison.R` | `h0_comparison.Rmd` |
+| Validate saved comparison results and draw eight Wilson interval figures | `appendix_plots.R` | `appendix_plots.Rmd` |
+| Test supplied data and report the observed statistic and p-value, with 1,000 permutations by default | — | `kyfan_data_test.Rmd` |
 
-The corresponding files in `reports/` explain the designs and display results.
-`R/simulation_core.R` contains the shared data generators and Ky–Fan tests;
-`R/entrywise_tests.R` contains LC, CLX, and CZZW; `R/wzz_test.R` contains WZZ.
-The remaining modules handle experiment scheduling, output, and plotting.
+Each simulation script has a matching report that explains the design and
+displays results. The supplied-data report accepts two CSV files or R data objects.
+`R/simulation_core.R` contains the shared data generators and Ky–Fan tests.
+Each comparison test has its own file and function:
+
+| File | Method | Function |
+|:--|:--|:--|
+| `R/lc_test.R` | Li–Chen (LC) | `method_lc(X, Y)` |
+| `R/clx_test.R` | Cai–Liu–Xia (CLX) | `method_clx(X, Y)` |
+| `R/czzw_test.R` | Chang–Zhou–Zhou–Wang (CZZW) | `method_czzw(X, Y, B)` |
+| `R/wzz_test.R` | Wang–Zhu–Zhang (WZZ) | `method_wzz(X, Y)` |
+
+`R/test_helpers.R` provides shared input checks and CLX/CZZW covariance-entry
+products. Load it before LC, CLX, or CZZW when using those files directly;
+the comparison script loads all dependencies automatically. Test functions
+return a statistic, p-value, status, and diagnostics. The remaining modules
+handle experiment scheduling, output, and plotting.
 
 ## Run
 
@@ -32,9 +46,9 @@ The scripts require only base R. They were checked with R 4.5.1. Open
 commands from the repository directory:
 
 ```sh
-Rscript simulation/01_reproduce_tables.R --smoke
-Rscript simulation/02_compare_methods_H0.R --smoke
-Rscript simulation/04_plot_appendix_C.R
+Rscript simulation/kyfan_tables.R --smoke
+Rscript simulation/h0_comparison.R --smoke
+Rscript simulation/appendix_plots.R
 ```
 
 `--smoke` uses a small design with three repetitions, 39 permutations or multiplier
@@ -43,7 +57,7 @@ saved results and performs no simulation. Absolute script paths also work when
 launching from another directory.
 
 Edit the `params` list at the top of a script to change settings. Without
-`--smoke`, the first two scripts run their full default designs:
+`--smoke`, `kyfan_tables.R` and `h0_comparison.R` run their full default designs:
 
 | Experiment | Repetitions `R` | Draws `B` | Workers | Summary rows |
 |:--|--:|--:|--:|--:|
@@ -72,10 +86,11 @@ Use a run's original source snapshot to resume that version.
 | `table_archive.csv` | 1,020 saved table cells: the 360 main results plus 660 historical extension results |
 
 These files contain estimates, not individual observations. Fresh simulation in
-scripts 01 and 02 does not require saved CSVs. Script 01 accepts an optional fixed
+`kyfan_tables.R` and `h0_comparison.R` does not require saved CSVs.
+`kyfan_tables.R` accepts an optional fixed
 reference and an explicit `mode="archived"` for viewing saved tables.
 `manuscript_reference.csv` is an optional fixed reference for Tables 1–3;
-script 04 reads `comparison_summary.csv` to draw Appendix C figures.
+`appendix_plots.R` reads `comparison_summary.csv` to draw Appendix C figures.
 
 ## Reports
 
@@ -84,15 +99,40 @@ RStudio). For example, from the repository directory:
 
 ```r
 rmarkdown::render(
-  "reports/02_compare_methods_H0.Rmd",
+  "reports/h0_comparison.Rmd",
   params = list(profile = "smoke", R = 3, B = 39, workers = 1)
 )
-rmarkdown::render("reports/04_plot_appendix_C.Rmd")
+rmarkdown::render("reports/appendix_plots.Rmd")
 ```
 
-Reports and scripts use the same workflow functions. Relative input and output
+Simulation reports and scripts use the same workflow functions. Relative input and output
 paths resolve from the repository directory. PDF reports additionally require
 a LaTeX installation; the figure script itself uses R's built-in PDF device.
+
+## Test supplied data
+
+Use two numeric CSV files with matching measurement columns, or two R matrices
+or data frames. Groups must have equal sample sizes. Choose `k` before inspecting
+the data; its default is 1. From the repository directory:
+
+```r
+rmarkdown::render(
+  "reports/kyfan_data_test.Rmd",
+  params = list(x_csv = "/path/group_x.csv", y_csv = "/path/group_y.csv",
+                k = 1, B = 1000)
+)
+# Alternatively, replace the CSV parameters with X = X_data, Y = Y_data.
+```
+
+The report displays the Ky–Fan norm, its scaled statistic, and the plus-one
+p-value. It saves results and permutation statistics under `results/data_test/`.
+With no input, it renders an input guide without running a test. Numerical ties
+use a relative tolerance of `100 * .Machine$double.eps` times the observed
+statistic; the existing simulation code is unchanged.
+
+For calculations without a report, source `R/simulation_core.R` followed by
+`R/kyfan_test.R` and call `method_kyfan(X, Y, k = 1, B = 1000)`.
+See the report for input requirements and the scope of permutation validity.
 
 ## Interpretation
 

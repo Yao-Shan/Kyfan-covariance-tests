@@ -1,0 +1,153 @@
+---
+title: "Ky–Fan permutation test for supplied data"
+output:
+  html_document:
+    toc: true
+    code_folding: hide
+params:
+  x_csv: ""
+  y_csv: ""
+  X: !r NULL
+  Y: !r NULL
+  csv_header: true
+  csv_sep: ","
+  k: 1
+  B: 1000
+  seed: 20260925
+  alpha: 0.05
+  output_dir: "results/data_test"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+.input <- normalizePath(knitr::current_input(dir = TRUE), mustWork = TRUE)
+.root <- normalizePath(file.path(dirname(.input), ".."), mustWork = TRUE)
+.workflow <- new.env(parent = globalenv())
+for (.file in c("simulation_core.R", "kyfan_test.R")) {
+  source(file.path(.root, "R", .file), local = .workflow)
+}
+```
+
+# Supply two samples
+
+Use two CSV files or two numeric R matrices/data frames. Rows are independent
+observations; columns are measurements of the same variables in the same order.
+Both groups must have the same sample size $m\geq2$ and dimension $p\geq1$.
+Remove identifier and group-label columns before testing. Missing, infinite, or
+nonnumeric measurements are rejected; no rows are silently removed.
+
+For CSV input, edit `x_csv` and `y_csv` above and click **Knit**, or run the first
+example below from the repository root. Relative paths resolve from that root.
+CSV headers must match; set `csv_header: false` for files without a header.
+For R objects, use the second example. Supply only one input mode.
+
+```{r usage, eval=FALSE}
+rmarkdown::render(
+  "reports/kyfan_data_test.Rmd",
+  params = list(x_csv = "/path/group_x.csv", y_csv = "/path/group_y.csv",
+                k = 1, B = 1000)
+)
+
+# X_data and Y_data are existing numeric matrices or data frames.
+rmarkdown::render(
+  "reports/kyfan_data_test.Rmd",
+  params = list(X = X_data, Y = Y_data, k = c(1, 3), B = 1000)
+)
+```
+
+Choose $k$ before inspecting the data. The default is $k=1$; multiple specified
+orders produce separate, unadjusted p-values using the same permutations.
+The report does not select an order or combine tests.
+
+# Statistic and p-value
+
+Let $S_X$ and $S_Y$ be the sample covariance matrices, each computed using its own
+sample mean and denominator $m-1$. The report returns both the unscaled Ky–Fan norm
+and the statistic used in the manuscript:
+
+$$
+\|S_X-S_Y\|_{(k)}=\sum_{j=1}^k s_j(S_X-S_Y),
+\qquad
+Z_{m,k}=\sqrt m\,\|S_X-S_Y\|_{(k)},
+$$
+
+where $s_j$ are the singular values in decreasing order. For this symmetric
+matrix, they are the absolute eigenvalues in decreasing order.
+
+Each of $B=1000$ independent random reallocations assigns $m$ pooled observations
+to one group and the remainder to the other. Group means and covariances are
+recomputed each time. The upper-tail plus-one p-value is
+
+$$
+\widehat p_k=\frac{1+\sum_{b=1}^{B}
+\mathbf 1\{Z_{m,k}^{\pi_b}\geq Z_{m,k}\}}{B+1}.
+$$
+
+Numerical ties are included using a tolerance of
+$100\,\epsilon_{\mathrm{machine}}|Z_{m,k}|$ in the comparison.
+The smallest possible reported p-value is $1/(B+1)$, approximately $0.001$ at
+$B=1000$. Set `seed` to reproduce the sampled reallocations.
+
+The manuscript assumes independent samples with a common population mean.
+Under equal covariance but potentially different population distributions,
+validity is asymptotic under its stated conditions. Finite-sample permutation
+validity requires exchangeability. Matching or differing sample means alone
+does not establish whether these assumptions hold.
+
+# Results
+
+```{r test}
+has_input <- !is.null(params$X) || !is.null(params$Y) ||
+  nzchar(params$x_csv) || nzchar(params$y_csv)
+fit <- NULL
+if (has_input) {
+  samples <- .workflow$kyfan_read_samples(
+    X = params$X, Y = params$Y,
+    x_csv = params$x_csv, y_csv = params$y_csv, root = .root,
+    csv_header = params$csv_header, csv_sep = params$csv_sep
+  )
+  fit <- .workflow$method_kyfan(
+    samples$X, samples$Y, k = params$k, B = params$B,
+    seed = params$seed, alpha = params$alpha
+  )
+  knitr::kable(
+    fit$summary[c("k", "kyfan_norm", "statistic", "exceedances", "p_value", "reject")],
+    digits = 6,
+    caption = sprintf("m = %d, p = %d, B = %d, alpha = %g",
+                      nrow(samples$X), ncol(samples$X), fit$B, fit$alpha)
+  )
+} else {
+  cat("No data supplied. Set both CSV paths or supply X and Y, then render again.\n")
+}
+```
+
+`kyfan_norm` is the unscaled norm; `statistic` is $Z_{m,k}$.
+`exceedances` counts simulated statistics at least as large as the observed
+statistic, including numerical ties. `reject` records whether the p-value is
+at most `alpha`, which defaults to 0.05.
+
+```{r save-results}
+if (!is.null(fit) && nzchar(params$output_dir)) {
+  output_root <- path.expand(params$output_dir)
+  if (!grepl("^(/|[A-Za-z]:[/\\\\])", output_root)) {
+    output_root <- file.path(.root, output_root)
+  }
+  dir.create(output_root, recursive = TRUE, showWarnings = FALSE)
+  result_dir <- tempfile("kyfan_", tmpdir = output_root)
+  if (!dir.create(result_dir)) stop("Could not create the result directory.")
+  write.csv(fit$summary, file.path(result_dir, "test_result.csv"), row.names = FALSE)
+  write.csv(fit$permutation_statistics,
+            file.path(result_dir, "permutation_statistics.csv"), row.names = FALSE)
+  saveRDS(fit[c("B", "k", "seed", "alpha", "relative_tolerance")],
+          file.path(result_dir, "configuration.rds"))
+  writeLines(capture.output(sessionInfo()), file.path(result_dir, "session_info.txt"))
+  cat("Saved results:", normalizePath(result_dir), "\n")
+}
+```
+
+Each run saves result and permutation-statistic CSVs in a new subdirectory of
+`results/data_test/`, together with the configuration and R session information.
+Input observations are not copied. Set `output_dir: ""` to skip these exports.
+
+The numerical engine is shared with the simulations in `R/simulation_core.R`;
+`R/kyfan_test.R` provides the supplied-data interface and numerical tie handling.

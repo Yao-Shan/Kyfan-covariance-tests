@@ -78,9 +78,9 @@ For an environment check, run the command below from the repository root. It use
 
 ```{r smoke-command, eval=FALSE, echo=TRUE}
 rmarkdown::render(
-  "reports/02_compare_methods_H0.Rmd",
+  "reports/h0_comparison.Rmd",
   params = list(profile = "smoke", R = 3, B = 39, workers = 1),
-  output_file = "02_compare_methods_H0_smoke.html"
+  output_file = "h0_comparison_smoke.html"
 )
 ```
 
@@ -196,8 +196,11 @@ Type I error rate. Filter `replicates.csv` by `status != "ok"` for failure reaso
 |:--|:--|
 | `R/load_workflow.R` | Workflow loading and source tracking |
 | `R/simulation_core.R` | Seeds, data generation, covariance structures and Ky–Fan permutations |
-| `R/entrywise_tests.R` | LC, CLX and CZZW statistics and calibration |
-| `R/wzz_test.R` | WZZ trace estimates and three-cumulant matching |
+| `R/test_helpers.R` | Shared validation and CLX/CZZW covariance-entry products |
+| `R/lc_test.R` | LC U-statistic and normal calibration; `method_lc()` |
+| `R/clx_test.R` | CLX squared maximum and Gumbel calibration; `method_clx()` |
+| `R/czzw_test.R` | CZZW maximum and Gaussian multiplier calibration; `method_czzw()` |
+| `R/wzz_test.R` | WZZ trace estimates and three-cumulant matching; `method_wzz()` |
 | `R/comparison_runner.R` | Scenario order, six-method runs, parallel execution, checkpoints and CSV summaries |
 
 Edit YAML `params` to change replication counts or output paths. The modules document

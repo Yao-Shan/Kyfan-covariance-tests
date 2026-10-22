@@ -22,7 +22,7 @@ repository structure and input CSV.
 From the project root:
 
 ```r
-rmarkdown::render("reports/04_plot_appendix_C.Rmd")
+rmarkdown::render("reports/appendix_plots.Rmd")
 ```
 
 From another directory, pass this file's absolute path to `rmarkdown::render()`.

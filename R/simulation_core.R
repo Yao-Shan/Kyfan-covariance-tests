@@ -1,4 +1,4 @@
-# Base-R sampling and fixed-order Ky-Fan permutation tests for reports 01--03.
+# Base-R sampling and fixed-order Ky-Fan permutation tests.
 
 # Seeds use master seed and ordered scenario/repetition/purpose tags, never worker IDs.
 # Keep key encoding and RNG kinds fixed to preserve streams.

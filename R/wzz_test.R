@@ -1,5 +1,5 @@
 # WZZ follows the 2022 author manuscript arXiv:2212.12338 (journal article: 2024).
-# Final journal typesetting is unaudited; see 02_compare_methods_H0.Rmd.
+# Final journal typesetting is unaudited; see reports/h0_comparison.Rmd.
 # Base R; observations are rows and variables are columns.
 
 # Validation, failures and feature-Gram centering ----------------------------
@@ -55,7 +55,7 @@
 # Three-cumulant matched shifted/scaled chi-square calibration ---------------
 
 # WZZ three-cumulant chi-square approximation; nonpositive cumulants fail.
-method_wang <- function(X, Y) {
+method_wzz <- function(X, Y) {
   xy <- .qt_validate(X, Y, min_n = 4L)
   z <- .wang_trace_components(xy$X, xy$Y)
   n1 <- z$n1
