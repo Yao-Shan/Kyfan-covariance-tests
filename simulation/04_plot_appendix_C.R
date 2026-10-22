@@ -1,0 +1,26 @@
+# Validate the saved summary and export eight Appendix C PDFs.
+# Edit these parameters; relative paths start at the repository root.
+params <- list(
+  input_csv = "data/comparison_summary.csv",
+  figure_dir = "results/figures"
+)
+
+# Locate this script when run with Rscript or source() from any directory.
+.slads_entry_file <- local({
+  files <- vapply(sys.frames(), function(frame) {
+    if (is.null(frame$ofile)) "" else as.character(frame$ofile)[1L]
+  }, character(1))
+  files <- files[nzchar(files)]
+  if (length(files)) tail(files, 1L) else {
+    arg <- grep("^--file=", commandArgs(), value = TRUE)
+    if (!length(arg)) stop("Run this script with source() or Rscript.")
+    sub("^--file=", "", arg[1L])
+  }
+})
+# source(..., chdir = TRUE) evaluates in the script's directory.
+if (!file.exists(.slads_entry_file) && file.exists(basename(.slads_entry_file))) {
+  .slads_entry_file <- basename(.slads_entry_file)
+}
+.slads_entry_file <- normalizePath(.slads_entry_file, winslash = "/", mustWork = TRUE)
+source(file.path(dirname(.slads_entry_file), "..", "R", "entrypoint.R"), local = TRUE)
+result <- slads_entry("appendix", params, .slads_entry_file)

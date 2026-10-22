@@ -6,6 +6,10 @@ output:
     toc: true
     toc_depth: 2
     code_folding: hide
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    latex_engine: xelatex
 params:
   profile: "manuscript"
   R: 1000
@@ -15,15 +19,16 @@ params:
   workers: 7
   resume: true
   checkpoint_every: 10
-  output_root: "../simulation_results/comparison"
+  output_root: "results/comparison"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = TRUE, message = FALSE, cache = FALSE)
 .slads_input_path <- normalizePath(knitr::current_input(dir = TRUE), mustWork = TRUE)
 knitr::opts_knit$set(root.dir = dirname(.slads_input_path))
-source(file.path(dirname(.slads_input_path), "R", "load_workflow.R"))
-slads_load_workflow("comparison", .slads_input_path, envir = knitr::knit_global())
+source(file.path(dirname(.slads_input_path), "..", "R", "load_workflow.R"))
+.workflow <- new.env(parent = globalenv())
+slads_load_workflow("comparison", .slads_input_path, envir = .workflow)
 ```
 
 ## Run and outputs
@@ -31,11 +36,12 @@ slads_load_workflow("comparison", .slads_input_path, envir = knitr::knit_global(
 This report compares six methods: Ky–Fan ($k=1,3$), LC, CLX, CZZW and WZZ.
 It retains the data generators, scenarios and method-specific seed rules. The default
 run covers all 180 scenarios; Table 4 and Appendix C show the $m=150$ subset.
-New runs use separate directories and do not overwrite prior results or resume older checkpoints.
+Each configuration has its own output directory; matching runs can resume checkpoints.
 
 This file sets parameters, runs the comparison and previews results. Modules in `R/`
 provide data generation, tests and checkpoints. R, `rmarkdown` and `knitr` are required;
-keep this file beside `R/`. No prior results or Zotero files are read.
+keep the repository structure intact. Relative parameter paths start at the repository root.
+No prior results are read.
 In RStudio, **Knit** runs `R=1000` replications per scenario with `B=1000`
 permutations/Gaussian multiplier draws per test at level 0.05.
 The default uses **7 workers, each with 1 BLAS thread**; `workers` accepts 1–7.
@@ -47,7 +53,7 @@ The two fixed-order Ky–Fan tests share data and permutation groups. All method
 the same data and use their own calibration. This report exports Wilson intervals for
 later plotting; it does not generate figures.
 
-Outputs are saved under `simulation_results/comparison/h0_<run_id>/`, one level above this file:
+Outputs are saved under `results/comparison/h0_<run_id>/`, relative to the repository root:
 
 | File | Contents |
 |:--|:--|
@@ -57,22 +63,22 @@ Outputs are saved under `simulation_results/comparison/h0_<run_id>/`, one level 
 | `scenario_summaries/` | CSV summaries saved as each scenario finishes |
 | `checkpoints/` | Resume files saved every `checkpoint_every` replications (default 10) |
 | `configuration.*`, `scenario_grid.csv`, `sessionInfo.txt` | Parameters, scenario grid and R environment |
-| `source_snapshot/` | Copies of this Rmd and all R dependencies |
+| `source_snapshot/` | Copies of the entry script or report and all R dependencies |
 
 With `resume: true`, matching code, scientific parameters and R version resume existing
 progress. Changing workers preserves seeds and run identity. Changing `R`, `B`, seeds,
 method code or scenarios selects a new output directory. The source hash includes the
-full Rmd and loaded R modules, so comments, formatting and report text also affect the run directory.
+entry script or report and loaded R modules, so comments, formatting and report text also affect the run directory.
 Do not run identical configurations concurrently. Set `resume: false` to start fresh
 in a new directory. `COMPLETED.txt` marks a finished run; inspect CSV `failed` and `status`
 fields for computational failures.
 
-For an environment check, run the command below from this file's directory. It uses
+For an environment check, run the command below from the repository root. It uses
 6 representative scenarios and **does not estimate test size**:
 
 ```{r smoke-command, eval=FALSE, echo=TRUE}
 rmarkdown::render(
-  "02_compare_methods_H0.Rmd",
+  "reports/02_compare_methods_H0.Rmd",
   params = list(profile = "smoke", R = 3, B = 39, workers = 1),
   output_file = "02_compare_methods_H0_smoke.html"
 )
@@ -128,13 +134,9 @@ scenario; cases outside sufficient conditions assess robustness without a theore
 ## Results
 
 ```{r run-comparison, message=TRUE}
-grid <- slads_grid(params$profile)
-result <- slads_run(
-  grid, R = params$R, B = params$B, alpha = params$alpha, seed = params$seed,
-  workers = params$workers, output_root = params$output_root,
-  resume = params$resume, checkpoint_every = params$checkpoint_every,
-  input_path = .slads_input_path
-)
+run <- .workflow$slads_execute_workflow("comparison", params)
+grid <- run$grid
+result <- run$result
 ```
 
 Output directory: `r result$directory`.

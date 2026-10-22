@@ -3,22 +3,26 @@ title: "Appendix C: Wilson interval plots"
 output:
   html_document:
     toc: true
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    latex_engine: xelatex
 params:
-  input_csv: "../manuscript/supplementary/comparison_summary.csv"
-  figure_dir: "../manuscript/figures"
+  input_csv: "data/comparison_summary.csv"
+  figure_dir: "results/figures"
 ---
 
 This report validates saved simulation summaries and Wilson intervals, then exports
 8 Appendix C PDFs. **It does not rerun simulations**. `R/appendix_plots.R` handles
 paths, validation and plotting, loaded through `R/load_workflow.R`. Keep the complete
-`simulation_reproducibility/` directory and input CSV.
+repository structure and input CSV.
 
 ## Run and parameters
 
 From the project root:
 
 ```r
-rmarkdown::render("simulation_reproducibility/04_plot_appendix_C.Rmd")
+rmarkdown::render("reports/04_plot_appendix_C.Rmd")
 ```
 
 From another directory, pass this file's absolute path to `rmarkdown::render()`.
@@ -26,10 +30,10 @@ Override YAML parameters with `params = list(...)`:
 
 | Parameter | Default | Purpose |
 |:--|:--|:--|
-| `input_csv` | `../manuscript/supplementary/comparison_summary.csv` | Saved simulation summary |
-| `figure_dir` | `../manuscript/figures` | Output directory for 8 PDFs |
+| `input_csv` | `data/comparison_summary.csv` | Saved simulation summary |
+| `figure_dir` | `results/figures` | Output directory for 8 PDFs |
 
-Relative paths resolve from this file's `simulation_reproducibility/` directory;
+Relative parameter paths resolve from the repository root;
 absolute paths are also accepted. Missing output directories are created, and existing
 PDFs with matching names are replaced. HTML rendering requires `rmarkdown`, `knitr`
 and Pandoc; validation and PDF plotting use base R only.
@@ -38,11 +42,11 @@ and Pandoc; validation and PDF plotting use base R only.
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE)
 .slads_input_path <- normalizePath(knitr::current_input(dir = TRUE),
                                    winslash = "/", mustWork = TRUE)
-source(file.path(dirname(.slads_input_path), "R", "load_workflow.R"),
+source(file.path(dirname(.slads_input_path), "..", "R", "load_workflow.R"),
   local = knitr::knit_global())
-slads_load_workflow("appendix", .slads_input_path, envir = knitr::knit_global())
-plot_spec <- appendix_plot_spec()
-plot_paths <- appendix_plot_paths(params, .slads_source_root)
+.workflow <- new.env(parent = globalenv())
+slads_load_workflow("appendix", .slads_input_path, envir = .workflow)
+plot_spec <- .workflow$appendix_plot_spec()
 ```
 
 ## Validate the design and Wilson intervals
@@ -71,12 +75,11 @@ The fixed x-axis ranges are 0–0.28 for LC and 0–0.12 for other methods; inte
 these ranges raise an error. PDFs are written only after all checks pass.
 
 ```{r validate-data}
-summary_data <- read.csv(plot_paths$input_csv, stringsAsFactors = FALSE,
-                         check.names = FALSE)
-checked <- appendix_validate_summary(summary_data, plot_spec)
+run <- .workflow$slads_execute_workflow("appendix", params)
+plot_paths <- run$plot_paths
+checked <- run$checked
 knitr::kable(checked$validation, digits = 16, row.names = FALSE)
-cat("Validated", nrow(checked$data), "cells across",
-    length(plot_spec$dimensions) * length(plot_spec$covariances),
+cat("Validated", nrow(checked$data), "cells across", length(run$output_files),
     "figures; valid replications per cell:",
     paste(unique(checked$data$valid), collapse = ", "), "\n")
 ```
@@ -91,7 +94,7 @@ row-wise: Ky-Fan ($k=1$), Ky-Fan ($k=3$), LC, CLX, CZZW, WZZ. Intervals show poi
 Monte Carlo uncertainty, not simultaneous confidence bands.
 
 ```{r export-pdfs}
-output_files <- appendix_export_pdfs(checked$data, plot_paths$figure_dir, plot_spec)
+output_files <- run$output_files
 knitr::kable(data.frame(Figure = basename(output_files),
                         Bytes = file.info(output_files)$size), row.names = FALSE)
 cat("Wrote eight vector PDFs to:", plot_paths$figure_dir, "\n")

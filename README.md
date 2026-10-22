@@ -1,94 +1,107 @@
-# Ky–Fan covariance test simulations
+# Ky–Fan covariance tests
 
-Reproducible R workflows for archived tables, null comparisons with LC, CLX,
-CZZW and WZZ, mean-shift sensitivity, and Appendix C plots. Keep the directory
-structure intact: the four reports load the ten modules in
-`simulation_reproducibility/R/` and the supplied CSV inputs.
+Simulation code for two-sample covariance equality using fixed-order Ky–Fan
+permutation tests. Ordinary R scripts run the experiments; R Markdown reports
+are optional.
 
-## Requirements
+## Files
 
-R, `rmarkdown`, `knitr`, and Pandoc (usually bundled with RStudio). Install the R
-packages with `install.packages(c("rmarkdown", "knitr"))`. Calculations and PDF
-plots use base R; `RhpcBLASctl` is optional. Simulations use at most seven workers,
-with one BLAS/OpenMP thread per worker. Report 01 falls back to serial execution
-on Windows; reports 02 and 03 use PSOCK workers and support Windows parallelism.
-
-## Run the reports
-
-Run these commands in R from the repository root:
-
-```r
-# Rebuild saved Tables 1–3; no new simulation by default.
-rmarkdown::render("simulation_reproducibility/01_reproduce_tables.Rmd")
-
-# Small execution checks for the comparison and mean-shift workflows.
-rmarkdown::render("simulation_reproducibility/02_compare_methods_H0.Rmd",
-  params = list(profile = "smoke", R = 3, B = 39, workers = 1))
-rmarkdown::render("simulation_reproducibility/03_mean_shift_sensitivity.Rmd",
-  params = list(profile = "smoke", R = 3, B = 39, workers = 1))
-
-# Validate the saved comparison summary and write eight Appendix C PDFs.
-rmarkdown::render("simulation_reproducibility/04_plot_appendix_C.Rmd")
+```text
+simulation/   R scripts for experiments and figures
+R/            Data generators, tests, simulation runners, and plotting functions
+data/         Saved results for reference comparisons and Appendix C
+reports/      Optional R Markdown reports
+results/      Generated outputs (created when needed; excluded from Git)
 ```
 
-Smoke runs check execution; they do not assess statistical calibration. To run
-reports 02 and 03 at their full defaults, omit `params`. To simulate Tables 1–3
-with report 01, pass `params = list(mode = "rerun")`. Other parameters can be
-changed through the YAML header or `params`.
+| Script in `simulation/` | Purpose |
+|:--|:--|
+| `01_reproduce_tables.R` | Simulate the Ky–Fan results for Tables 1–3 |
+| `02_compare_methods_H0.R` | Compare Ky–Fan orders 1 and 3 with LC, CLX, CZZW, and WZZ under covariance equality |
+| `04_plot_appendix_C.R` | Validate saved comparison results and draw eight Wilson interval figures |
 
-| Report | Default behavior |
-| --- | --- |
-| `01_reproduce_tables.Rmd` | Archived tables; rerun defaults: R = B = 1000, one worker |
-| `02_compare_methods_H0.Rmd` | 180 scenarios, six methods; R = B = 1000, seven workers |
-| `03_mean_shift_sensitivity.Rmd` | 180 base scenarios, six mean settings, k = 1 and 3; R = B = 500, seven workers |
-| `04_plot_appendix_C.Rmd` | Read the supplied summary and write eight PDFs to `manuscript/figures/`; no simulations |
+The corresponding files in `reports/` explain the designs and display results.
+`R/simulation_core.R` contains the shared data generators and Ky–Fan tests;
+`R/entrywise_tests.R` contains LC, CLX, and CZZW; `R/wzz_test.R` contains WZZ.
+The remaining modules handle experiment scheduling, output, and plotting.
 
-The mean-shift report compares zero means, a common shift, and unequal means
-with difference norms 1 and 2. Unequal means are sensitivity experiments outside
-the paper's common-mean null model.
+## Run
 
-## Results, seeds and resuming
+The scripts require only base R. They were checked with R 4.5.1. Open
+`Kyfan-covariance-tests.Rproj` in RStudio and source a script, or run these
+commands from the repository directory:
 
-Simulation outputs go to `simulation_results/`, including configurations,
-replicate records, summaries, checkpoints, session information and
-`source_snapshot/`. The master seed defaults to `20260925`; scenario, replicate
-and purpose determine random streams. Changing worker count preserves seeds and
-run identity. Checkpoints are saved every ten replications by default.
+```sh
+Rscript simulation/01_reproduce_tables.R --smoke
+Rscript simulation/02_compare_methods_H0.R --smoke
+Rscript simulation/04_plot_appendix_C.R
+```
 
-Run identifiers include scientific parameters and the full contents of loaded
-source/reference inputs; even comment edits create a new run identity. Matching
-inputs, configuration and R environment allow resuming with `resume = TRUE`.
-Use frozen input snapshots to resume older runs. Avoid concurrent identical
-configurations. In reports 02 and 03, `COMPLETED.txt` indicates all requested
-replications finished; also inspect `failed` counts and replicate `status`.
-Those reports record failed computations without counting them as non-rejections.
-Report 01 stops on computation errors and does not write a completion marker.
+`--smoke` uses a small design with three repetitions, 39 permutations or multiplier
+draws, and one worker. It checks execution, not test size. The figure script reads
+saved results and performs no simulation. Absolute script paths also work when
+launching from another directory.
 
-## Saved inputs and provenance
+Edit the `params` list at the top of a script to change settings. Without
+`--smoke`, the first two scripts run their full default designs:
 
-- `simulation_reproducibility/data/table_archive.csv` has 1,020 archive cells:
-  360 main-table results from the completed R = B = 1000 rerun
-  (`rerun_main_20261006`) and 660 historical extension results that were not rerun.
-  The historical random streams were not retained, so exact recovery of those
-  experiments is not guaranteed.
-- `simulation_reproducibility/data/manuscript_reference.csv` is the shared
-  main-table reference for reports 01 and 03. Report 03 recovers reference counts
-  and unrounded MCSEs from saved rates using R = 1000.
-- `manuscript/supplementary/comparison_summary.csv` contains the saved comparison
-  summary used by report 04. Rendering that report validates the selected 720
-  Appendix C cells and their Wilson intervals before plotting.
+| Experiment | Repetitions `R` | Draws `B` | Workers | Summary rows |
+|:--|--:|--:|--:|--:|
+| Tables 1–3 | 1,000 | 1,000 | 1 | 360 |
+| Six-method comparison | 1,000 | 1,000 | 7 | 1,080 |
 
-Saved reference values are not new simulations. Method sources and assumptions
-are documented in report 02. WZZ follows the authors' public 2022 manuscript,
-[arXiv:2212.12338](https://arxiv.org/abs/2212.12338), corresponding to the 2024
-journal article; the final journal formulas have not been independently
-re-audited here.
+The design uses `(p,m) = (10,50), (10,150), (40,150)`, four covariance structures,
+and all 15 pairs of the N, T, E, G, and L distributions. The nominal level is 0.05.
+Appendix C uses only `m=150`, giving 720 cells.
+Worker counts are capped at seven, with one BLAS thread per worker. The table
+runner uses serial execution on Windows.
 
-## Completed checks
+New outputs go to `results/tables/`, `results/comparison/`, and
+`results/figures/`. Simulation runs save summaries,
+replicate results, checkpoints, configuration, and a runnable source snapshot.
+Matching configurations can resume interrupted runs. Source changes, including
+comments or switching between a script and a report, produce different run IDs.
+Use a run's original source snapshot to resume that version.
 
-The structural refactor was checked against the original implementation:
-small-run statistics, p-values, decisions and seeds matched; serial, two-worker
-and resumed runs agreed. All 1,020 archive cells, 17 generated LaTeX tables and
-eight appendix plots matched, and all four reports rendered successfully.
-These code edits did not repeat the full Monte Carlo experiments or independently
-re-audit the original papers' formulas.
+## Saved data
+
+| File in `data/` | Contents |
+|:--|:--|
+| `comparison_summary.csv` | 1,080 six-method results, with counts, MCSEs, and 95% Wilson intervals; `R=B=1000` |
+| `manuscript_reference.csv` | 360 saved Table 1–3 rates from the completed October 6, 2026 rerun |
+| `table_archive.csv` | 1,020 saved table cells: the 360 main results plus 660 historical extension results |
+
+These files contain estimates, not individual observations. Fresh simulation in
+scripts 01 and 02 does not require saved CSVs. Script 01 accepts an optional fixed
+reference and an explicit `mode="archived"` for viewing saved tables.
+`manuscript_reference.csv` is an optional fixed reference for Tables 1–3;
+script 04 reads `comparison_summary.csv` to draw Appendix C figures.
+
+## Reports
+
+HTML reports additionally require `rmarkdown`, `knitr`, and Pandoc (included with
+RStudio). For example, from the repository directory:
+
+```r
+rmarkdown::render(
+  "reports/02_compare_methods_H0.Rmd",
+  params = list(profile = "smoke", R = 3, B = 39, workers = 1)
+)
+rmarkdown::render("reports/04_plot_appendix_C.Rmd")
+```
+
+Reports and scripts use the same workflow functions. Relative input and output
+paths resolve from the repository directory. PDF reports additionally require
+a LaTeX installation; the figure script itself uses R's built-in PDF device.
+
+## Interpretation
+
+LC denotes Li–Chen, CLX Cai–Liu–Xia, CZZW Chang–Zhou–Zhou–Wang, and WZZ
+Wang–Zhu–Zhang. Each test retains its own calibration. WZZ follows the authors'
+public 2022 manuscript corresponding to their 2024 article; this code does not
+claim a formula-by-formula audit of the final journal version.
+
+The experiments measure rejection rates under covariance equality. Some settings
+fall outside competing methods' sufficient conditions. See the reports for
+these qualifications.
+Failures are recorded separately and must not be treated as non-rejections.

@@ -35,12 +35,12 @@ appendix_absolute_path <- function(path, base, must_work = FALSE) {
   normalizePath(path, winslash = "/", mustWork = must_work)
 }
 
-# Resolve input/output paths from the notebook location; require an existing input.
+# Resolve input/output paths from the repository root; require an existing input.
 appendix_plot_paths <- function(params, source_root) {
   if (is.null(params$input_csv)) {
-    params$input_csv <- "../manuscript/supplementary/comparison_summary.csv"
+    params$input_csv <- "data/comparison_summary.csv"
   }
-  if (is.null(params$figure_dir)) params$figure_dir <- "../manuscript/figures"
+  if (is.null(params$figure_dir)) params$figure_dir <- "results/figures"
   list(input_csv = appendix_absolute_path(params$input_csv, source_root,
                                          must_work = TRUE),
        figure_dir = appendix_absolute_path(params$figure_dir, source_root))

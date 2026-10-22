@@ -1,0 +1,270 @@
+---
+title: "Tables 1–3: Simulation and Optional Reference Comparison"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    code_folding: hide
+    self_contained: true
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    latex_engine: xelatex
+    number_sections: true
+params:
+  mode: "rerun"
+  profile: "manuscript"
+  R: 1000
+  B: 1000
+  alpha: 0.05
+  seed: 20260925
+  workers: 1
+  resume: true
+  output_root: "results/tables"
+  reference_csv: ""
+  reference_rate_column: "rejection_rate"
+  reference_R: 1000
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = TRUE, message = TRUE, fig.width = 9, fig.height = 5
+)
+.slads_input_path <- normalizePath(knitr::current_input(dir = TRUE), mustWork = TRUE)
+knitr::opts_knit$set(root.dir = dirname(.slads_input_path))
+stopifnot(params$mode %in% c("rerun", "archived"))
+```
+
+```{r load-workflow, include=FALSE}
+source(file.path(dirname(.slads_input_path), "..", "R", "load_workflow.R"),
+  local = knitr::knit_global())
+.workflow <- new.env(parent = globalenv())
+slads_load_workflow("tables", .slads_input_path, envir = .workflow)
+```
+
+# Run from simulated data
+
+**Default Knit runs the experiment:** construct the design, generate fresh samples,
+perform the Ky–Fan permutation tests, and summarize the rejection decisions.
+The default is the full manuscript design with $R=B=1000$, so it can take substantial
+time. Run the examples below from the repository root; the smoke example is a short execution check.
+
+No existing observations, result CSVs, or `data/` directory are required for simulation.
+Keep the repository structure intact: scripts in `simulation/`, modules in `R/`, and reports in `reports/`. Rendering requires `rmarkdown`, `knitr`, and Pandoc;
+statistical calculations use base R. Relative parameter paths resolve from the repository root.
+
+`R` counts independently generated sample pairs per scenario; `B` counts permutations
+within each test. `profile="manuscript"` covers 180 scenarios and two orders, hence
+360 result cells. `profile="archive"` runs the explicitly defined extended design
+with 1,020 result cells; the name is retained for compatibility and does not read
+archived results when `mode="rerun"`.
+
+```{r usage, eval=FALSE}
+# Short execution check; these estimates are not manuscript results.
+rmarkdown::render(
+  "reports/01_reproduce_tables.Rmd",
+  params = list(mode = "rerun", profile = "smoke", R = 20, B = 99),
+  output_file = "01_reproduce_smoke.html"
+)
+
+# Full manuscript experiment: 180 scenarios, k=1 and k=3, R=B=1000.
+rmarkdown::render(
+  "reports/01_reproduce_tables.Rmd",
+  params = list(mode = "rerun", profile = "manuscript", R = 1000, B = 1000),
+  output_file = "01_reproduce_full.html"
+)
+
+# Extended experiment: 360 scenarios and 1,020 result cells.
+rmarkdown::render(
+  "reports/01_reproduce_tables.Rmd",
+  params = list(mode = "rerun", profile = "archive", R = 1000, B = 1000),
+  output_file = "01_reproduce_extended.html"
+)
+```
+
+`mode="archived"` remains an explicit saved-results viewer. Only that mode requires
+`data/table_archive.csv`; it performs no simulation and supports `manuscript` or
+`archive` profiles. Its output is labeled as saved results.
+
+# Simulation design
+
+Each group contains $m$ independent, zero-mean observations in $p$ dimensions with
+covariance $\Sigma$. Transform $W=\Sigma^{1/2}Z$ using the **symmetric positive-definite
+square root**.
+
+| Code | Standardized vector $Z$ |
+|:---|:---|
+| N | Independent standard normal coordinates |
+| T | $\sqrt{6/Q}H$, $Q\sim\chi^2_8$, $H\sim N(0,I_p)$; one shared $Q$ per observation |
+| E | $\sqrt{E}H$, $E\sim\operatorname{Exp}(1)$; one shared mixing variable per observation |
+| G | $\sqrt{V}H$, $V\sim\operatorname{Gamma}(3,1/3)$, with scale $1/3$; one shared mixing variable per observation |
+| L | Independent standard logistic coordinates scaled by $\sqrt{3}/\pi$ |
+
+| Covariance | Definition |
+|:---|:---|
+| C1 | $I_p$ |
+| C2 | Entry $(i,j)$ is $0.5^{|i-j|}$ |
+| C3 | First five diagonal entries are 4; the rest are 1 |
+| C4 | First block has size 4; remaining blocks have size 2; each block is $0.4I_d+0.6J_d$ |
+
+The 15 distribution pairs comprise five identical-distribution and ten different-distribution
+pairs. All satisfy the equal-covariance $H_0$; only identical-distribution pairs are
+exchangeable controls. These experiments estimate rejection rates under $H_0$, not power.
+
+The main tables use $(p,m)=(10,50),(10,150),(40,150)$ and $k=1,3$. The extended profile
+uses the following orders, each crossed with C1–C4 and all 15 distribution pairs:
+
+| $(p,m)$ | Orders $k$ |
+|:---|:---|
+| $(10,50),(10,150)$ | 1, 3 |
+| $(20,50),(40,50)$ | 1, 2, 3 |
+| $(20,150)$ | 1, 2, 5 |
+| $(40,150)$ | 1, 2, 3, 5 |
+
+Sample covariances use denominator $m-1$ and recomputed group means. For the covariance
+difference $D=\widehat\Sigma_X-\widehat\Sigma_Y$, let $|\lambda|_{(j)}(D)$ denote the
+$j$th largest absolute eigenvalue. The statistic is
+
+$$T_k=\sqrt m\sum_{j=1}^{k}|\lambda|_{(j)}(D).$$
+
+Each independent permutation uniformly selects $m$ pooled raw observations for the
+first group. The upper-tail p-value and rejection rule are
+
+$$\widehat p_k=\frac{1+\sum_{b=1}^B\mathbf 1\{T_{k,b}\geq T_{k,\mathrm{obs}}\}}{B+1},
+\qquad \text{reject if }\widehat p_k\leq\alpha.$$
+
+Within each scenario and replicate, all $k$ share data and permutations. Covariances
+computed from group sums and second moments are algebraically equivalent to `cov()`.
+Replicate seeds depend on the master seed, scenario, replicate, and purpose; execution
+order and worker count do not affect results.
+
+# Construct the experimental scenarios
+
+The grid is defined in code from the design above. No result table is used to infer
+which experiments should be run.
+
+```{r scenario-grid}
+run <- .workflow$slads_execute_workflow("tables", params)
+grid <- run$grid
+table_data <- run$table_data
+result_dir <- run$result_dir
+knitr::kable(data.frame(
+  Item = c("Profile", "Scenarios", "Scenario/order result cells",
+           "Requested repetitions R", "Requested permutations B", "Nominal level"),
+  Value = c(params$profile, nrow(grid),
+            sum(lengths(strsplit(grid$ks, ",", fixed = TRUE))),
+            params$R, params$B, params$alpha)
+))
+```
+
+# Optional fixed reference
+
+Leave `reference_csv: ""` to simulate without reference results. To compare with a
+fixed table, set `reference_csv` to its path. The CSV must contain `p`, `m`,
+`covariance`, `pair`, `k`, and the rate column selected by `reference_rate_column`.
+Set `reference_R` to the number of repetitions used for that reference table.
+An explicitly supplied missing or malformed file is reported before simulation starts.
+A reference must also be outside the current run directory so that rerunning cannot
+overwrite it; a different historical run directory is allowed.
+
+The existing `data/manuscript_reference.csv` contains the **later completed rerun**,
+not the earliest table. In the preserved historical `new_vs_archived.csv`, the earlier
+table is in **`archived_rate`** and the later rerun is in `rejection_rate`. To compare
+with that earlier table, select `reference_rate_column: "archived_rate"` and
+`reference_R: 1000`. The reference is read only and is never replaced by new estimates.
+
+```{r optional-reference}
+if (is.null(run$reference_info)) {
+  cat("No reference supplied. Simulation requires no saved results.\n")
+} else {
+  cat("Fixed reference:", run$reference_info$path, "\nRate column:",
+      run$reference_info$rate_column, "\n")
+}
+```
+
+# Run and save results
+
+A simulation run saves configuration, source hashes, replicate p-values and rejection
+indicators, summary CSVs, and session information, with checkpoints every 10 replicates.
+Matching inputs and configuration permit resumption; `resume: false` recomputes the run.
+The run identifier includes the entry script or report and loaded R modules. Text edits also change it,
+so use the frozen source snapshot to resume an older run. Reference data are not used
+to generate samples or determine rejection decisions.
+
+`workers` defaults to 1 and is capped at 7, with one BLAS/OpenMP thread per worker.
+Windows runs serially. Existing reference files and manuscript sources are not modified.
+
+```{r run}
+cat("Source:", run$provenance, "\nOutput directory:", result_dir, "\n")
+```
+
+# Rejection rates and Monte Carlo uncertainty
+
+For $s$ rejections in $R$ successfully completed repetitions,
+
+$$\widehat q=s/R,\qquad
+\operatorname{MCSE}(\widehat q)=\sqrt{\widehat q(1-\widehat q)/R}.$$
+
+The summary includes pointwise 95% Wilson intervals. `rate_minus_alpha` is the estimated
+rejection rate minus the requested nominal level; it is a descriptive diagnostic, not
+an automatic pass/fail test. A small smoke run checks execution only.
+
+```{r simulation-summary}
+if (!is.null(run$diagnostics)) {
+  knitr::kable(head(run$diagnostics, 12), digits = 4)
+} else {
+  cat("Saved table view: archived estimates used R=B=1000 and alpha=0.05.\n")
+}
+```
+
+# Tables
+
+Entries are rejection rates (Monte Carlo standard errors). Simulation results use the
+requested configuration. Unrun scenarios in smoke or partial designs remain dashes;
+no saved values are inserted into newly computed tables.
+
+```{r tables, results='asis', echo=FALSE}
+groups <- unique(table_data[c("p", "m", "k")])
+for (i in seq_len(nrow(groups))) {
+  g <- groups[i, ]
+  cat(sprintf("\n\n## p=%d, m=%d, k=%d\n\n", g$p, g$m, g$k))
+  tab <- .workflow$format_paper_table(table_data, g$p, g$m, g$k)
+  print(knitr::kable(tab, align = c("l", rep("c", ncol(tab) - 1L))))
+}
+```
+
+# Optional comparison with the fixed reference
+
+The comparison preserves every new result, including scenarios without a reference
+match. Differences are **new rate minus reference rate**. The combined MCSE below
+assumes independent simulations. It is not a tolerance for identical random streams,
+and agreement within it does not establish exact reproduction of an earlier run.
+Exact reproduction also requires the matching implementation, random streams, and
+simulation configuration. The earliest historical experiments cannot be reconstructed
+from their rounded table entries alone.
+
+The selected reference file, its hash, the selected rate column, and the assumed
+reference repetition count are saved in a separate `reference_comparisons/` directory.
+Different reference inputs produce separate comparison directories.
+
+```{r differences}
+if (!is.null(run$comparison)) {
+  cat("Comparison directory:", run$comparison_dir, "\n")
+  knitr::kable(head(run$comparison, 30), digits = 4)
+} else {
+  cat("Reference comparison skipped.\n")
+}
+```
+
+# Source files and session
+
+| Source | Purpose |
+|:--|:--|
+| `R/simulation_core.R` | Data generation, seeds, and fixed-order permutation tests |
+| `R/table_reproduction.R` | Explicit scenarios, simulation scheduling, summaries, and tables |
+| `R/runtime.R` | Source hashes and runnable code snapshots |
+
+```{r session}
+sessionInfo()
+```

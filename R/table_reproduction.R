@@ -10,8 +10,13 @@ archive_key <- function(x) paste(x$p, x$m, x$covariance, x$pair, x$k, sep = ":")
 
 # Validate 1,020 saved cells and rounded MCSEs; archived values never replace a new run.
 read_archived_results <- function() {
-  x <- read.csv(file.path(.slads_source_root, "data", "table_archive.csv"),
-    stringsAsFactors = FALSE)
+  archive_path <- file.path(.slads_source_root, "data", "table_archive.csv")
+  if (!file.exists(archive_path)) {
+    stop("Archived table values are unavailable: ", archive_path,
+      ". Use mode = 'rerun' to generate new results, or restore data/table_archive.csv ",
+      "for mode = 'archived'.")
+  }
+  x <- read.csv(archive_path, stringsAsFactors = FALSE)
   x$R <- 1000L
   x$B <- 1000L
   x$alpha <- 0.05
@@ -96,16 +101,25 @@ slads_grid <- function(profile = c("manuscript", "archive", "smoke", "spectral")
     g <- data.frame(p = c(100L, 100L, 500L, 500L), m = 100L, covariance = c("SPIKE10",
       "SPIKE10", "C1", "C1"), pair = c("N-N", "L-L", "N-N", "L-L"), ks = "1,3", stringsAsFactors = FALSE)
   } else {
-    a <- read_archived_results()
-    if (profile == "manuscript")
-      a <- select_manuscript(a)
-    # One scenario produces all its requested k values from shared draws and permutations.
-    g <- unique(a[c("p", "m", "covariance", "pair")])
-    g$ks <- vapply(seq_len(nrow(g)), function(i) {
-      z <- g[i, ]
-      paste(sort(unique(a$k[a$p == z$p & a$m == z$m & a$covariance == z$covariance &
-        a$pair == z$pair])), collapse = ",")
-    }, character(1))
+    # The scenario design is explicit and does not depend on archived results.
+    # Retain the historical p/m, pair, covariance ordering and requested orders.
+    sizes <- data.frame(
+      p = c(10L, 10L, 20L, 20L, 40L, 40L),
+      m = c(50L, 150L, 50L, 150L, 50L, 150L),
+      ks = c("1,3", "1,3", "1,2,3", "1,2,5", "1,2,3", "1,2,3,5"),
+      stringsAsFactors = FALSE
+    )
+    if (profile == "manuscript") {
+      sizes <- sizes[c(1L, 2L, 6L), , drop = FALSE]
+      sizes$ks <- "1,3"
+    }
+    # Each scenario shares its generated data and permutations across all orders.
+    g <- do.call(rbind, lapply(seq_len(nrow(sizes)), function(i) {
+      combinations <- expand.grid(covariance = paste0("C", 1:4), pair = pair_levels,
+        stringsAsFactors = FALSE)
+      data.frame(p = sizes$p[i], m = sizes$m[i], combinations, ks = sizes$ks[i],
+        stringsAsFactors = FALSE)
+    }))
   }
   g$law_x <- substr(g$pair, 1, 1)
   g$law_y <- substr(g$pair, 3, 3)
@@ -171,7 +185,7 @@ slads_summary <- function(raw, alpha = 0.05) {
 # Run Ky-Fan with deterministic streams and checkpoints; R/B count repetitions/permutations.
 slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L,
                       workers = 1L, output_root = "outputs", resume = TRUE,
-                      checkpoint_every = 10L) {
+                      checkpoint_every = 10L, protected_paths = character()) {
   # This runner produces KyFan tables; method comparisons are in 02_compare_methods_H0.Rmd.
   stopifnot(R >= 1L, R == as.integer(R), length(B) == 1L, is.finite(B),
     B >= 19L, B == as.integer(B), alpha > 0, alpha < 1)
@@ -191,6 +205,16 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
   )
   run_id <- paste0("reproduce_", substr(slads_hash(config), 1, 12))
   outdir <- file.path(output_root, run_id)
+  # A fixed reference must not be an output that this same run can overwrite.
+  if (length(protected_paths)) {
+    protected <- vapply(protected_paths, normalizePath, character(1),
+      winslash = "/", mustWork = TRUE)
+    destination <- normalizePath(outdir, winslash = "/", mustWork = FALSE)
+    if (any(protected == destination | startsWith(protected, paste0(destination, "/")))) {
+      stop("The fixed reference is inside this run's output directory. ",
+        "Choose a fixed copy outside this run directory before starting the simulation.")
+    }
+  }
   dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
   slads_snapshot_sources(outdir, .slads_input_path)
   saveRDS(config, file.path(outdir, "configuration.rds"))

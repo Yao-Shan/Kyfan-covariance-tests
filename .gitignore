@@ -1,34 +1,16 @@
-# Generated simulation outputs and figures
-/simulation_results/
-/manuscript/figures/
-/outputs/
-/output/
-*.html
-*.pdf
-*_files/
-*_cache/
-/cache/
-checkpoints/
-source_snapshot/
-
-# R session and editor state
+.DS_Store
 .Rhistory
 .RData
 .Ruserdata
 .Rproj.user/
-.Renviron
-*.Rproj
-.DS_Store
-
-# Local working files, archives and audit artifacts
-/archive/
-/history/
-/work/
-/tmp/
-/.codex/
-/.agents/
-/UPLOAD_PLAN.txt
-*.log
-*.tmp
-*.bak
-*~
+results/
+reports/*.html
+reports/*.pdf
+reports/*.tex
+reports/*.log
+reports/*.aux
+reports/*.out
+reports/*.toc
+reports/*_files/
+reports/*_cache/
+*.Rcheck/
