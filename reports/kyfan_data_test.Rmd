@@ -5,23 +5,25 @@ output:
     toc: true
     code_folding: hide
 params:
+  # Supply two CSV paths or pass X and Y through render(params = ...).
   x_csv: ""
   y_csv: ""
   X: !r NULL
   Y: !r NULL
   csv_header: true
   csv_sep: ","
-  k: 1
-  B: 1000
+  k: 1 # Choose the spectral order before inspecting the data.
+  B: 1000 # Random reallocations of the pooled observations.
   seed: 20260925
   alpha: 0.05
-  output_dir: "results/data_test"
+  output_dir: "results/data_test" # Empty disables CSV and metadata exports.
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 .input <- normalizePath(knitr::current_input(dir = TRUE), mustWork = TRUE)
 .root <- normalizePath(file.path(dirname(.input), ".."), mustWork = TRUE)
+# Load the permutation engine and supplied-data interface together.
 .workflow <- new.env(parent = globalenv())
 for (.file in c("simulation_core.R", "kyfan_test.R")) {
   source(file.path(.root, "R", .file), local = .workflow)
@@ -48,7 +50,7 @@ rmarkdown::render(
                 k = 1, B = 1000)
 )
 
-# X_data and Y_data are existing numeric matrices or data frames.
+# Pass existing numeric samples; each row is one observation.
 rmarkdown::render(
   "reports/kyfan_data_test.Rmd",
   params = list(X = X_data, Y = Y_data, k = c(1, 3), B = 1000)
@@ -97,6 +99,7 @@ does not establish whether these assumptions hold.
 # Results
 
 ```{r test}
+# With no input, render the guide without running a test.
 has_input <- !is.null(params$X) || !is.null(params$Y) ||
   nzchar(params$x_csv) || nzchar(params$y_csv)
 fit <- NULL
@@ -133,6 +136,7 @@ if (!is.null(fit) && nzchar(params$output_dir)) {
     output_root <- file.path(.root, output_root)
   }
   dir.create(output_root, recursive = TRUE, showWarnings = FALSE)
+  # Create a new directory so earlier results are retained.
   result_dir <- tempfile("kyfan_", tmpdir = output_root)
   if (!dir.create(result_dir)) stop("Could not create the result directory.")
   write.csv(fit$summary, file.path(result_dir, "test_result.csv"), row.names = FALSE)

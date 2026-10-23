@@ -1,11 +1,11 @@
-# Validate the saved summary and export eight Appendix C PDFs.
-# Edit these parameters; relative paths start at the repository root.
+# Draw Appendix C Wilson intervals from the saved comparison summary.
+# Set parameters below; relative paths resolve from the repository root.
 params <- list(
   input_csv = "data/comparison_summary.csv",
   figure_dir = "results/figures"
 )
 
-# Locate this script when run with Rscript or source() from any directory.
+# Find this entry file for both Rscript and source() calls.
 .slads_entry_file <- local({
   files <- vapply(sys.frames(), function(frame) {
     if (is.null(frame$ofile)) "" else as.character(frame$ofile)[1L]
@@ -17,7 +17,7 @@ params <- list(
     sub("^--file=", "", arg[1L])
   }
 })
-# source(..., chdir = TRUE) evaluates in the script's directory.
+# Handle source(..., chdir = TRUE), which changes the working directory.
 if (!file.exists(.slads_entry_file) && file.exists(basename(.slads_entry_file))) {
   .slads_entry_file <- basename(.slads_entry_file)
 }

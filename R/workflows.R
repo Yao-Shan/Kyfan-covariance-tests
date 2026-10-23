@@ -1,5 +1,6 @@
-# Shared orchestration for simulation scripts and optional reports.
+# Shared workflows for simulation scripts and reports.
 
+# Simulate or load table results, with an optional fixed-reference comparison.
 slads_tables_workflow <- function(params) {
   stopifnot(params$mode %in% c("rerun", "archived"))
   params$output_root <- slads_resolve_path(params$output_root, .slads_source_root)
@@ -8,6 +9,7 @@ slads_tables_workflow <- function(params) {
   reference_info <- NULL
   if (!is.character(params$reference_csv) || length(params$reference_csv) != 1L ||
       is.na(params$reference_csv)) stop("reference_csv must be one path or an empty string.")
+  # Validate the optional reference before starting a simulation.
   if (nzchar(params$reference_csv)) {
     if (params$mode != "rerun") stop("Reference comparison requires mode='rerun'.")
     reference_path <- normalizePath(slads_resolve_path(params$reference_csv, .slads_source_root), mustWork = TRUE)
@@ -60,6 +62,7 @@ slads_tables_workflow <- function(params) {
       stop("Saved-results viewing supports profile='manuscript' or 'archive'.")
     }
     result <- NULL
+    # Copy the archive used for this saved-results view.
     archived <- read_archived_results()
     table_data <- if (params$profile == "archive") archived else select_manuscript(archived)
     archive_path <- file.path(.slads_source_root, "data", "table_archive.csv")
@@ -86,6 +89,7 @@ slads_tables_workflow <- function(params) {
   } else {
     cat("Saved table view: archived estimates used R=B=1000 and alpha=0.05.\n")
   }
+  # Match reference cells by scenario and order, not by CSV row position.
   if (!is.null(reference) && !is.null(result)) {
     at <- match(archive_key(table_data), archive_key(reference))
     comparison <- table_data[c("p", "m", "covariance", "pair", "k", "R", "B", "alpha",
@@ -98,6 +102,7 @@ slads_tables_workflow <- function(params) {
     comparison$reference_mcse <- reference$reference_mcse[at]
     comparison$difference <- comparison$new_rate - comparison$reference_rate
     comparison$rate_exact_match <- comparison$new_rate == comparison$reference_rate
+    # This standard error assumes independent new and reference simulations.
     comparison$independent_difference_mcse <- sqrt(comparison$new_mcse^2 + comparison$reference_mcse^2)
     comparison_id <- slads_hash(reference_info)
     comparison_dir <- file.path(result_dir, "reference_comparisons", substr(comparison_id, 1, 12))
@@ -123,6 +128,7 @@ slads_tables_workflow <- function(params) {
     reference_info = reference_info, comparison = comparison, comparison_dir = comparison_dir)
 }
 
+# Run the six-method H0 comparison and return its grid and results.
 slads_comparison_workflow <- function(params) {
   params$output_root <- slads_resolve_path(params$output_root, .slads_source_root)
   grid <- slads_grid(params$profile)
@@ -136,6 +142,7 @@ slads_comparison_workflow <- function(params) {
   list(grid = grid, result = result)
 }
 
+# Validate saved results before exporting the Appendix C figures.
 slads_appendix_workflow <- function(params) {
   plot_spec <- appendix_plot_spec()
   plot_paths <- appendix_plot_paths(params, .slads_source_root)
@@ -148,6 +155,7 @@ slads_appendix_workflow <- function(params) {
     output_files = output_files)
 }
 
+# Dispatch the requested workflow using its supplied parameters.
 slads_execute_workflow <- function(workflow, params) {
   switch(workflow,
     tables = slads_tables_workflow(params),

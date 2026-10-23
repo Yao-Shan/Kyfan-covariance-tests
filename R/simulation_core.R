@@ -1,7 +1,7 @@
-# Base-R sampling and fixed-order Ky-Fan permutation tests.
+# Base-R simulation generators and fixed-order Ky-Fan permutation tests.
 
-# Seeds use master seed and ordered scenario/repetition/purpose tags, never worker IDs.
-# Keep key encoding and RNG kinds fixed to preserve streams.
+# Derive seeds from the master seed and ordered scenario/repetition/purpose tags.
+# Worker IDs are excluded; changing the key encoding changes the random streams.
 slads_seed <- function(master, ...) {
   key <- paste(..., collapse = "|")
   h <- as.double(master %% 2147483646)
@@ -9,13 +9,14 @@ slads_seed <- function(master, ...) {
   as.integer(h + 1)
 }
 
-# Restore all RNG algorithms before setting a stream, including sample.int().
+# Fix all RNG algorithms, including sample.int(), before setting each stream.
 slads_set_seed <- function(seed) {
   RNGkind("Mersenne-Twister", "Inversion", "Rejection")
   set.seed(seed)
 }
 
-# C1--C4 are the paper covariance designs; SPIKE10 serves the optional profile in 01.
+# C1--C4 are the paper covariance designs; SPIKE10 supports
+# slads_grid(profile = "spectral") in R/table_reproduction.R.
 slads_covariance <- function(p, model = "C1") {
   stopifnot(p >= 5L, p == as.integer(p))
   if (model == "C1")
@@ -28,7 +29,7 @@ slads_covariance <- function(p, model = "C1") {
     stopifnot(p %% 2L == 0L)
     S <- diag(p)
     start <- 1L
-    # One four-coordinate block, followed by two-coordinate blocks.
+    # One size-four block followed by size-two blocks, each with correlation 0.6.
     for (d in c(4L, rep(2L, (p - 4L) / 2L))) {
       ii <- seq.int(start, length.out = d)
       S[ii, ii] <- 0.4 * diag(d) + 0.6
@@ -41,17 +42,16 @@ slads_covariance <- function(p, model = "C1") {
   stop("Unknown covariance model: ", model)
 }
 
-# Use the design's symmetric positive-definite root to preserve the generator.
+# Use the symmetric positive-definite square root to preserve the generator.
 slads_sqrt <- function(Sigma) {
   e <- eigen(Sigma, symmetric = TRUE)
   stopifnot(min(e$values) > 0)
   tcrossprod(sweep(e$vectors, 2L, sqrt(e$values), "*"), e$vectors)
 }
 
-# Draw independent rows with target covariance; T/E/G share one random scale per row.
-# Preserve random-draw order to reproduce the original streams.
+# Draw independent rows with the target covariance from standardized laws.
+# T/E/G share one random scale per row; draw order determines reproducible streams.
 slads_draw <- function(n, law, sqrt_sigma) {
-  # Each row is one observation; all laws have standardized covariance I_p.
   p <- ncol(sqrt_sigma)
   if (law == "L") {
     Z <- matrix(rlogis(n * p), n, p) * sqrt(3) / pi
@@ -65,20 +65,20 @@ slads_draw <- function(n, law, sqrt_sigma) {
       G = sqrt(rgamma(n, shape = 3, scale = 1 / 3)),
       stop("Unknown standardized law: ", law)
     )
-    # R recycles the length-n vector down each column, sharing one scale per row.
+    # Column-wise recycling applies the same scale to every coordinate in a row.
     Z <- Z * scale
   }
   Z %*% sqrt_sigma
 }
 
-# Position k contains the sum of the k largest absolute eigenvalues.
+# For symmetric D, position k is its Ky-Fan norm: the k largest singular values summed.
 kyfan_curve <- function(D) cumsum(sort(
   abs(eigen(D, symmetric = TRUE, only.values = TRUE)$values), decreasing = TRUE
 ))
 
-# Fixed-order test for equal-size m x p samples; all orders share permutations.
-# Supplied B x m assignments identify first-group pooled indices and override B.
-# No data-dependent order selection or nested permutation.
+# Test prespecified orders for equal-size m x p samples using shared permutations.
+# Rows of assignments select the first group's pooled indices; their count overrides B.
+# Orders are not selected from the data; each p-value is unadjusted.
 kyfan_permutation <- function(X, Y, ks = c(1L, 3L), B = 1000L,
                              keep_spectra = FALSE, assignments = NULL) {
   stopifnot(
@@ -99,7 +99,7 @@ kyfan_permutation <- function(X, Y, ks = c(1L, 3L), B = 1000L,
     B <- nrow(assignments)
   }
   Z <- rbind(X, Y)
-  # Global centering is algebraically neutral and improves numerical stability.
+  # Pooled centering leaves covariance differences unchanged and improves stability.
   Z <- sweep(Z, 2L, colMeans(Z), "-")
   total_sum <- colSums(Z)
   total_cross <- crossprod(Z)
@@ -108,7 +108,7 @@ kyfan_permutation <- function(X, Y, ks = c(1L, 3L), B = 1000L,
     a <- colSums(A)
     b <- total_sum - a
     AA <- crossprod(A)
-    # Recover both centered covariances from pooled sums; both use denominator m - 1.
+    # Recover the covariance difference from pooled sums, using m - 1 in both groups.
     D <- (2 * AA - total_cross - (tcrossprod(a) - tcrossprod(b)) / m) / (m - 1)
     kyfan_curve(D)
   }
@@ -127,10 +127,11 @@ kyfan_permutation <- function(X, Y, ks = c(1L, 3L), B = 1000L,
     out[b, ] <- if (keep_spectra) v else v[ks]
   }
   chosen <- if (keep_spectra) out[, ks, drop = FALSE] else out
-  # sqrt(m) is positive and common, so unscaled comparisons give identical p-values.
-  # Count ties in the right tail and apply the same plus-one correction for every k.
+  # The common sqrt(m) factor cancels in upper-tail comparisons.
+  # Include ties and apply the plus-one correction separately to each order.
   pv <- (1 + colSums(sweep(chosen, 2L, observed[ks], ">="))) / (B + 1)
   names(pv) <- paste0("k", ks)
+  # statistic and perm are scaled by sqrt(m); observed and perm_spectra are not.
   list(p_value = pv, statistic = setNames(sqrt(m) * observed[ks], names(pv)), observed = observed,
     perm = sqrt(m) * chosen, perm_spectra = if (keep_spectra) out else NULL, B = B, ks = ks)
 }

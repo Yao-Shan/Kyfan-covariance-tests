@@ -8,7 +8,7 @@ output:
     toc_depth: 2
     latex_engine: xelatex
 params:
-  input_csv: "data/comparison_summary.csv"
+  input_csv: "data/comparison_summary.csv" # Saved six-method simulation summary.
   figure_dir: "results/figures"
 ---
 
@@ -44,6 +44,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE)
                                    winslash = "/", mustWork = TRUE)
 source(file.path(dirname(.slads_input_path), "..", "R", "load_workflow.R"),
   local = knitr::knit_global())
+# Isolate plotting helpers from simulation workflows.
 .workflow <- new.env(parent = globalenv())
 slads_load_workflow("appendix", .slads_input_path, envir = .workflow)
 plot_spec <- .workflow$appendix_plot_spec()
@@ -75,6 +76,7 @@ The fixed x-axis ranges are 0–0.28 for LC and 0–0.12 for other methods; inte
 these ranges raise an error. PDFs are written only after all checks pass.
 
 ```{r validate-data}
+# Validate counts and intervals before writing the figures.
 run <- .workflow$slads_execute_workflow("appendix", params)
 plot_paths <- run$plot_paths
 checked <- run$checked

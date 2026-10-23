@@ -1,21 +1,21 @@
-# Simulate Tables 1-3; an external reference comparison is optional.
-# Edit these parameters; relative paths start at the repository root.
+# Reproduce the Ky-Fan tables and optionally compare with saved rates.
+# Set parameters below; relative paths resolve from the repository root.
 params <- list(
-  mode = "rerun",
+  mode = "rerun", # Use "archived" to display saved results.
   profile = "manuscript",
-  R = 1000,
-  B = 1000,
+  R = 1000, # Independent sample pairs per scenario.
+  B = 1000, # Permutations per sample pair.
   alpha = 0.05,
   seed = 20260925,
   workers = 1,
-  resume = TRUE,
+  resume = TRUE, # Reuse checkpoints with matching configuration and source.
   output_root = "results/tables",
-  reference_csv = "",
+  reference_csv = "", # Empty skips the fixed-reference comparison.
   reference_rate_column = "rejection_rate",
-  reference_R = 1000
+  reference_R = 1000 # Repetitions used to estimate the reference rates.
 )
 
-# Locate this script when run with Rscript or source() from any directory.
+# Find this entry file for both Rscript and source() calls.
 .slads_entry_file <- local({
   files <- vapply(sys.frames(), function(frame) {
     if (is.null(frame$ofile)) "" else as.character(frame$ofile)[1L]
@@ -27,7 +27,7 @@ params <- list(
     sub("^--file=", "", arg[1L])
   }
 })
-# source(..., chdir = TRUE) evaluates in the script's directory.
+# Handle source(..., chdir = TRUE), which changes the working directory.
 if (!file.exists(.slads_entry_file) && file.exists(basename(.slads_entry_file))) {
   .slads_entry_file <- basename(.slads_entry_file)
 }

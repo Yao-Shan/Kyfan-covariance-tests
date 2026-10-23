@@ -1,5 +1,6 @@
-# Supplied-data interface; source simulation_core.R first.
+# Supplied-data Ky-Fan interface; requires R/simulation_core.R.
 
+# Require equal sample dimensions and matching variable names in the same order.
 kyfan_check_samples <- function(X, Y) {
   as_sample <- function(x, name) {
     if (is.data.frame(x)) {
@@ -33,6 +34,7 @@ kyfan_check_samples <- function(X, Y) {
   list(X = X, Y = Y)
 }
 
+# Read either two supplied samples or two CSV files, preserving column names.
 kyfan_read_samples <- function(X = NULL, Y = NULL, x_csv = "", y_csv = "",
                                root = getwd(), csv_header = TRUE, csv_sep = ",") {
   paths <- list(x_csv, y_csv)
@@ -66,6 +68,8 @@ kyfan_read_samples <- function(X = NULL, Y = NULL, x_csv = "", y_csv = "",
   kyfan_check_samples(read_sample(x_csv), read_sample(y_csv))
 }
 
+# Test prespecified orders with shared permutations and a relative tolerance for ties.
+# Each order has its own unadjusted p-value.
 method_kyfan <- function(X, Y, k = 1L, B = 1000L, seed = 20260925L,
                          alpha = 0.05,
                          relative_tolerance = 100 * .Machine$double.eps) {
@@ -95,7 +99,7 @@ method_kyfan <- function(X, Y, k = 1L, B = 1000L, seed = 20260925L,
   k <- sort(unique(as.integer(k)))
   B <- as.integer(B)
 
-  # Restore the caller's RNG settings and saved seed.
+  # Restore RNG settings and seed presence even if the calculation fails.
   old_kind <- RNGkind()
   had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   if (had_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv)
@@ -120,7 +124,8 @@ method_kyfan <- function(X, Y, k = 1L, B = 1000L, seed = 20260925L,
     stop("Non-finite statistics: check the data scale before testing.", call. = FALSE)
   }
 
-  # Include numerical ties without introducing an absolute scale floor.
+  # Recount numerical ties with a relative threshold and the same plus-one correction.
+  # No absolute tolerance is added, so common rescaling preserves the threshold rule.
   tolerance <- relative_tolerance * abs(fit$statistic)
   exceedances <- colSums(sweep(fit$perm, 2L, fit$statistic - tolerance, ">="))
   p_value <- setNames((1 + exceedances) / (B + 1), names(fit$statistic))

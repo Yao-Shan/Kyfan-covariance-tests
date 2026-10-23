@@ -1,10 +1,9 @@
-# LC (Li--Chen, 2012): mean-corrected U-statistic with normal calibration.
+# LC (Li--Chen, 2012): full mean-corrected U-statistic with normal calibration.
 # Requires R/test_helpers.R; observations are rows and variables are columns.
 
-# Exact O(n^2 p) form of Li--Chen (2012), Eq. (2.1), retaining all mean corrections.
-# Translation invariance permits centering. With zero-diagonal H and r = rowSums(H):
-# ordered triple sum = sum(r^2) - sum(H^2);
-# ordered quadruple sum = sum(H)^2 - 4 sum(r^2) + 2 sum(H^2).
+# Estimate tr(Sigma^2) using Li--Chen (2012), Eq. (2.1), in O(n^2 p) time.
+# Translation invariance permits centering; zeroing H's diagonal lets row sums
+# recover the ordered triple and quadruple terms with all indices distinct.
 .slads_trace_square_u <- function(X, already_centered = FALSE) {
   n <- nrow(X)
   if (n < 4L)
@@ -22,7 +21,7 @@
     s4 / (n * (n - 1) * (n - 2) * (n - 3))
 }
 
-# Combine the within-group and cross-group trace estimates.
+# Combine trace estimates into an unbiased estimate of ||Sigma1 - Sigma2||_F^2.
 .slads_li_components <- function(X, Y) {
   n1 <- nrow(X)
   n2 <- nrow(Y)
@@ -30,19 +29,20 @@
   Yc <- sweep(Y, 2L, colMeans(Y), "-")
   A1 <- .slads_trace_square_u(Xc, already_centered = TRUE)
   A2 <- .slads_trace_square_u(Yc, already_centered = TRUE)
-  # Eq. (2.2), including all mean-correction terms, reduces exactly to
-  # tr(cov(X) cov(Y)); use the Gram form to avoid forming p-by-p matrices.
+  # Eq. (2.2) reduces to tr(cov(X) cov(Y)), with denominators n1 - 1 and n2 - 1.
+  # The Gram form avoids constructing p-by-p sample covariance matrices.
   C12 <- sum(tcrossprod(Xc, Yc)^2)/((n1 - 1) * (n2 - 1))
   list(A1 = A1, A2 = A2, C12 = C12, T = A1 + A2 - 2 * C12, n1 = n1, n2 = n2)
 }
 
-# LC full U-statistic with a standard-normal upper tail; invalid null scales fail.
+# Calibrate the full U-statistic with a standard-normal upper tail.
+# A nonpositive or non-finite null scale returns a failure record.
 method_lc <- function(X, Y) {
   invalid <- .slads_entry_validate(X, Y)
   if (!is.null(invalid))
     return(invalid)
   a <- .slads_li_components(X, Y)
-  # Cross weights follow Li--Chen (2012), p. 914, and authors' PEtests code.
+  # Cross-sample weights follow Li--Chen (2012), p. 914, and the authors' PEtests code.
   sd0 <- 2 * a$A1/a$n2 + 2 * a$A2/a$n1
   if (!is.finite(sd0) || sd0 <= 0 || !is.finite(a$T))
     return(.slads_entry_failure(

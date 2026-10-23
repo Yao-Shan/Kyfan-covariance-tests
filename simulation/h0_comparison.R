@@ -1,18 +1,18 @@
-# Compare Ky-Fan, LC, CLX, CZZW and WZZ under equal covariance.
-# Edit these parameters; relative paths start at the repository root.
+# Compare two Ky-Fan orders with LC, CLX, CZZW, and WZZ under H0.
+# Set parameters below; relative paths resolve from the repository root.
 params <- list(
   profile = "manuscript",
-  R = 1000,
-  B = 1000,
+  R = 1000, # Independent sample pairs per scenario.
+  B = 1000, # Ky-Fan permutations and CZZW Gaussian multiplier draws.
   alpha = 0.05,
   seed = 20260925,
-  workers = 7,
-  resume = TRUE,
-  checkpoint_every = 10,
+  workers = 7, # Maximum number of parallel scenario workers.
+  resume = TRUE, # Reuse checkpoints with matching configuration and source.
+  checkpoint_every = 10, # Save after this many repetitions per scenario.
   output_root = "results/comparison"
 )
 
-# Locate this script when run with Rscript or source() from any directory.
+# Find this entry file for both Rscript and source() calls.
 .slads_entry_file <- local({
   files <- vapply(sys.frames(), function(frame) {
     if (is.null(frame$ofile)) "" else as.character(frame$ofile)[1L]
@@ -24,7 +24,7 @@ params <- list(
     sub("^--file=", "", arg[1L])
   }
 })
-# source(..., chdir = TRUE) evaluates in the script's directory.
+# Handle source(..., chdir = TRUE), which changes the working directory.
 if (!file.exists(.slads_entry_file) && file.exists(basename(.slads_entry_file))) {
   .slads_entry_file <- basename(.slads_entry_file)
 }

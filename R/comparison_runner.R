@@ -1,10 +1,10 @@
-# Deterministic scenario/method streams and checkpointed comparison output.
-# Load dependencies together through R/load_workflow.R.
+# Six-method null comparison with reproducible streams and resumable checkpoints.
+# Load dependencies through R/load_workflow.R.
 
-# Method metadata and stable scenario design ---------------------------------
+# Methods and scenario design
 
 slads_default_methods <- c("KyFan_k1", "KyFan_k3", "LC", "CLX", "CZZW", "WZZ")
-# CZZW/WZZ retain historical Chang/Wang RNG tags to preserve random streams.
+# Keep historical RNG tags so renaming Chang/Wang to CZZW/WZZ preserves streams.
 slads_method_seed_token <- function(method) {
   switch(method, CZZW = "Chang", WZZ = "Wang", method)
 }
@@ -26,7 +26,7 @@ pair_levels <- c(
   "T-L", "E-G", "E-L", "G-L"
 )
 
-# Build the ordered H0 grid (or six-scenario smoke subset) with stable RNG keys.
+# Scenario names identify RNG streams independently of grid order or worker count.
 slads_grid <- function(profile = c("manuscript", "smoke")) {
   profile <- match.arg(profile)
   sizes <- data.frame(p = c(10L, 10L, 40L), m = c(50L, 150L, 150L))
@@ -52,7 +52,7 @@ slads_grid <- function(profile = c("manuscript", "smoke")) {
   g[c("scenario", "p", "m", "covariance", "pair", "law_x", "law_y", "exchangeable")]
 }
 
-# Record method/scenario interpretation limits without skipping the test.
+# Label interpretation limits; these annotations do not exclude a method from a scenario.
 slads_applicability <- function(method, g) {
   laws <- c(g$law_x, g$law_y)
   if (method %in% c("KyFan_k1", "KyFan_k3"))
@@ -69,9 +69,9 @@ slads_applicability <- function(method, g) {
   "finite-sample calibration; remaining moment, spectral and dimension assumptions are not automatically certified"
 }
 
-# Method execution and result records ---------------------------------------
+# Method execution
 
-# Normalize replicate results; failed or invalid p-values have missing decisions.
+# Only successful evaluations with a finite p-value in [0, 1] receive a decision.
 slads_result_row <- function(method, res, seconds, g, alpha) {
   status <- if (is.null(res$status)) "invalid_result" else as.character(res$status)[1]
   pv <- if (is.null(res$p_value)) NA_real_ else as.numeric(res$p_value)[1]
@@ -91,7 +91,7 @@ slads_result_row <- function(method, res, seconds, g, alpha) {
 
 # Apply all six methods to shared samples with deterministic calibration seeds.
 slads_compare_one <- function(X, Y, g, r, seed, B, alpha) {
-  # Both fixed orders use the same observations and permutation assignments.
+  # Compute k = 1 and k = 3 together to share observations and permutation assignments.
   slads_set_seed(slads_seed(seed, g$scenario, r, "permutation"))
   started <- proc.time()[["elapsed"]]
   ky <- tryCatch(
@@ -115,6 +115,7 @@ slads_compare_one <- function(X, Y, g, r, seed, B, alpha) {
     }, error = function(e) list(p_value = NA_real_, statistic = NA_real_, status = "error",
       detail = conditionMessage(e)))
     seconds <- proc.time()[["elapsed"]] - started
+    # Each Ky-Fan row includes the shared permutation time; these timings are not additive.
     if (method %in% c("KyFan_k1", "KyFan_k3"))
       seconds <- seconds + ky_seconds
     slads_result_row(method, res, seconds, g, alpha)
@@ -135,7 +136,7 @@ slads_compare_one <- function(X, Y, g, r, seed, B, alpha) {
   rows
 }
 
-# Per-scenario summaries and Monte Carlo uncertainty ------------------------
+# Rates and Monte Carlo uncertainty
 
 # Two-sided Wilson interval; return missing bounds when the denominator is zero.
 slads_wilson <- function(s, n, level = 0.95) {
@@ -149,8 +150,8 @@ slads_wilson <- function(s, n, level = 0.95) {
   c(max(0, middle - half), min(1, middle + half))
 }
 
-# Main rates require all requested trials to be valid.
-# Conditional rates and intervals use only successful trials.
+# Main rates, MCSEs, and intervals require all R requested trials to be valid.
+# Conditional summaries use only valid trials; failures remain visible in the counts.
 slads_summary <- function(raw, config) {
   groups <- split(raw, interaction(raw$scenario, raw$method, drop = TRUE, lex.order = TRUE))
   out <- do.call(rbind, lapply(groups, function(d) {
@@ -194,9 +195,8 @@ slads_summary <- function(raw, config) {
   out
 }
 
-# Configuration identity and atomic output ----------------------------------
+# Run identity and output
 
-# Validate a scalar integer against inclusive bounds.
 slads_integer <- function(x, name, minimum = 1L, maximum = .Machine$integer.max) {
   if (length(x) != 1L || !is.numeric(x) || !is.finite(x) || x != floor(x) || x < minimum ||
     x > maximum)
@@ -212,12 +212,12 @@ slads_hash <- function(x) {
   unname(tools::md5sum(f))
 }
 
-# Hash the notebook and loaded dependencies through the shared provenance helper.
+# Include the entry script or report and its dependencies in the run identity.
 slads_code_hash <- function(path) {
   slads_source_hash(path)
 }
 
-# Commit an RDS file by renaming a temporary file beside its target.
+# Write beside the target so renaming commits a fully serialized checkpoint.
 slads_write_rds <- function(x, path) {
   tmp <- tempfile(pattern = ".checkpoint-", tmpdir = dirname(path))
   on.exit(unlink(tmp))
@@ -226,7 +226,7 @@ slads_write_rds <- function(x, path) {
     stop("Cannot commit checkpoint: ", path)
 }
 
-# Commit a UTF-8 CSV by renaming a temporary file beside its target.
+# Publish the CSV only after writing its temporary file in the same directory.
 slads_write_csv <- function(x, path) {
   tmp <- tempfile(pattern = ".csv-", tmpdir = dirname(path))
   on.exit(unlink(tmp))
@@ -235,9 +235,9 @@ slads_write_csv <- function(x, path) {
     stop("Cannot commit CSV: ", path)
 }
 
-# Checkpoint validation and scenario workers --------------------------------
+# Checkpoints and scenario workers
 
-# Validate checkpoint identity, method rows, seeds, and decisions before resuming.
+# Reject incompatible or inconsistent checkpoints before reusing completed repetitions.
 slads_validate_checkpoint <- function(cp, g, config, signature, path) {
   bad <- function(message) stop("Invalid checkpoint ", path, ": ", message)
   if (!is.list(cp) || !identical(cp$signature, signature) || !identical(cp$scenario, g$scenario))
@@ -277,7 +277,7 @@ slads_validate_checkpoint <- function(cp, g, config, signature, path) {
   invisible(TRUE)
 }
 
-# Complete one scenario, resuming validated repetitions and saving checkpoints.
+# Resume after the last saved repetition; unsaved repetitions reuse their original seeds.
 slads_worker <- function(i, grid, config, signature, directory, resume, checkpoint_every) {
   g <- grid[i, , drop = FALSE]
   path <- file.path(directory, "checkpoints", paste0(g$scenario, ".rds"))
@@ -311,9 +311,9 @@ slads_worker <- function(i, grid, config, signature, directory, resume, checkpoi
   list(summary = summary, checkpoint = path)
 }
 
-# Final replicate output and public runner ----------------------------------
+# Final output and public runner
 
-# Export ordered checkpoints to one CSV, reading one scenario at a time.
+# Read one scenario at a time to avoid holding every replicate in memory.
 slads_stream_replicates <- function(paths, file) {
   tmp <- tempfile(pattern = ".replicates-", tmpdir = dirname(file))
   on.exit(unlink(tmp))
@@ -328,8 +328,8 @@ slads_stream_replicates <- function(paths, file) {
     stop("Cannot commit replicate-level CSV: ", file)
 }
 
-# Run the comparison with deterministic streams, source snapshots, and checkpoints.
-# R/B count repetitions/resamples; worker count does not change scientific settings.
+# R counts sample pairs per scenario; B counts permutation or multiplier draws per test.
+# Scenario/repetition seeds make random streams independent of worker scheduling.
 slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L, workers = 7L,
   output_root = "../simulation_results/comparison", resume = TRUE, checkpoint_every = 10L,
   input_path = .slads_input_path) {
@@ -347,7 +347,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
     stop("output_root must be a path.")
   if (1/(B + 1) > alpha)
     warning("The plus-one permutation test cannot reject at this alpha with this B.")
-  # New R workers inherit these settings before loading their BLAS runtimes.
+  # Limit nested parallelism; new workers inherit these settings before loading BLAS.
   Sys.setenv(
     OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
     VECLIB_MAXIMUM_THREADS = "1", BLIS_NUM_THREADS = "1", RCPP_PARALLEL_NUM_THREADS = "1"
@@ -356,6 +356,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
     RhpcBLASctl::blas_set_num_threads(1L)
     RhpcBLASctl::omp_set_num_threads(1L)
   }
+  # Hash scientific settings, sources, and runtime identity, excluding scheduling settings.
   config <- list(
     engine = "selected-six-methods-v4", grid = grid, R = R, B = B,
     alpha = as.numeric(alpha), seed = seed, methods = slads_default_methods,
@@ -381,7 +382,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
     if (!identical(readRDS(cfgpath), config))
       stop("Existing output configuration does not match: ", cfgpath)
   } else slads_write_rds(config, cfgpath)
-  # Snapshot the notebook and every source dependency used for this workflow.
+  # Save the entry script or report and loaded dependencies alongside the results.
   slads_snapshot_sources(directory, input_path)
   slads_write_csv(grid, file.path(directory, "scenario_grid.csv"))
   writeLines(capture.output(str(config)), file.path(directory, "configuration.txt"))
@@ -394,12 +395,12 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
   common <- list(grid = grid, config = config, signature = signature, directory = directory,
     resume = resume, checkpoint_every = checkpoint_every)
   if (actual_workers > 1L) {
-    # PSOCK also works in RStudio and on Windows; no forked GUI process.
+    # Separate R processes support Windows and avoid forking an RStudio session.
     cl <- parallel::makePSOCKcluster(actual_workers, outfile = file.path(directory, "workers.log"))
     on.exit(parallel::stopCluster(cl), add = TRUE)
     env <- environment(slads_run)
     candidates <- ls(envir = env, all.names = TRUE)
-    # Export private helpers too; method seed aliases are required on every worker.
+    # Workers need private method helpers and the historical seed aliases as well.
     exported <- candidates[grepl("^(slads_|\\.slads_|kyfan_|method_|\\.qt_|\\.wang_|pair_levels$)",
       candidates)]
     parallel::clusterExport(cl, exported, envir = env)
@@ -422,6 +423,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
     file.path(directory, "failed_cells.csv")
   )
   writeLines(capture.output(sessionInfo()), file.path(directory, "sessionInfo.txt"))
+  # Completion means all repetitions were attempted; failed method evaluations remain recorded.
   writeLines(
     c(
       "Completed all requested repetitions. Inspect status/failed counts before using results.",

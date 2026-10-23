@@ -1,5 +1,6 @@
-# Source provenance without RNG draws; hash relative paths and contents for portable IDs.
+# Track source files and preserve runnable snapshots.
 
+# Record repository-relative paths and file hashes without drawing random numbers.
 slads_source_manifest <- function(input_path) {
   input_path <- normalizePath(input_path, winslash = "/", mustWork = TRUE)
   root <- normalizePath(.slads_source_root, winslash = "/", mustWork = TRUE)
@@ -24,7 +25,7 @@ slads_source_manifest <- function(input_path) {
     stringsAsFactors = FALSE)
 }
 
-# Hash the entry and loaded modules; text edits create a new run ID.
+# Include all source text in the run identity, including comments.
 slads_source_hash <- function(input_path) {
   manifest <- slads_source_manifest(input_path)
   tmp <- tempfile(pattern = "slads-sources-")
@@ -33,7 +34,7 @@ slads_source_hash <- function(input_path) {
   unname(tools::md5sum(tmp))
 }
 
-# Snapshot runnable sources before simulation; existing copies must match byte-for-byte.
+# Copy sources into the run directory and verify any existing copies.
 slads_snapshot_sources <- function(directory, input_path) {
   manifest <- slads_source_manifest(input_path)
   destination <- file.path(directory, "source_snapshot")

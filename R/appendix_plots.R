@@ -1,6 +1,6 @@
-# Appendix C: validate archived counts and draw Wilson-interval PDFs; no simulation.
+# Appendix C figures use validated archived counts; this workflow does not rerun simulations.
 
-# Fixed Appendix C design, method aliases, labels, and axes.
+# Keep the archived design and method-specific axes fixed across all eight figures.
 appendix_plot_spec <- function() {
   method_order <- c("KyFan_k1", "KyFan_k3", "LC", "CLX", "CZZW", "WZZ")
   method_titles <- c("Ky-Fan (k = 1)", "Ky-Fan (k = 3)", "LC", "CLX",
@@ -13,6 +13,7 @@ appendix_plot_spec <- function() {
     required_columns = c("m", "p", "covariance", "pair", "method", "alpha",
                          "rejections", "valid", "rejection_rate", "ci_low",
                          "ci_high", "confidence_level"),
+    # Accept historical names while displaying the current method labels.
     method_aliases = c(KyFan_k1 = "KyFan_k1", KyFan_k3 = "KyFan_k3",
                        LC = "LC", CLX = "CLX", Chang = "CZZW", CZZW = "CZZW",
                        Wang = "WZZ", WZZ = "WZZ"),
@@ -28,7 +29,7 @@ appendix_plot_spec <- function() {
   )
 }
 
-# Resolve relative paths against base; expand absolute and tilde-prefixed paths.
+# Resolve relative paths against base and expand a leading tilde.
 appendix_absolute_path <- function(path, base, must_work = FALSE) {
   path <- path.expand(path)
   if (!grepl("^(/|[A-Za-z]:[/\\\\]|~)", path)) path <- file.path(base, path)
@@ -46,7 +47,6 @@ appendix_plot_paths <- function(params, source_root) {
        figure_dir = appendix_absolute_path(params$figure_dir, source_root))
 }
 
-# Require finite nonnegative integer counts (strictly positive when requested).
 appendix_assert_integer_count <- function(x, name, positive = FALSE) {
   if (any(!is.finite(x)) || any(x != floor(x)) ||
       any(x < if (positive) 1 else 0)) {
@@ -70,8 +70,7 @@ appendix_wilson_from_counts <- function(rejections, valid) {
              mcse_recomputed = sqrt(rate_recomputed * (1 - rate_recomputed) / valid))
 }
 
-# Check saved summaries against counts; skip absent optional columns.
-# Stop on non-finite values or discrepancies above tolerance.
+# Compare saved summaries with count-based calculations; absent optional fields are skipped.
 appendix_check_saved <- function(data, column, calculated, tolerance = 1e-10) {
   if (!column %in% names(data)) {
     return(data.frame(column = character(), max_absolute_difference = numeric()))
@@ -86,19 +85,18 @@ appendix_check_saved <- function(data, column, calculated, tolerance = 1e-10) {
   data.frame(column = column, max_absolute_difference = discrepancy)
 }
 
-# Build row keys from the ordered design identifiers.
 appendix_cell_keys <- function(data, key_columns) {
   do.call(paste, c(data[key_columns], sep = "|"))
 }
 
-# Validate all 720 design cells, counts, summaries, and axes before plotting.
-# Also check optional MCSE and conditional summaries when present.
+# Require all 720 cells of the m = 150 design before producing any figures.
+# Recompute summaries from counts and check optional saved fields when present.
 appendix_validate_summary <- function(summary_data, spec = appendix_plot_spec()) {
   missing_columns <- setdiff(spec$required_columns, names(summary_data))
   if (length(missing_columns)) {
     stop("Missing required CSV columns: ", paste(missing_columns, collapse = ", "))
   }
-  # Normalize aliases before validation so mixed aliases cannot hide duplicates.
+  # Normalize historical method names before checking for duplicate design cells.
   selected <- with(summary_data,
                    m == 150 & p %in% spec$dimensions &
                    covariance %in% spec$covariances & pair %in% spec$pair_order &
@@ -125,6 +123,7 @@ appendix_validate_summary <- function(summary_data, spec = appendix_plot_spec())
   appendix_assert_integer_count(data$valid, "valid", positive = TRUE)
   appendix_assert_integer_count(data$rejections, "rejections")
   if (any(data$rejections > data$valid)) stop("Rejections exceed valid replications.")
+  # This archive requires 1,000 valid trials per cell, with no saved failures or incomplete cells.
   if (any(data$valid != 1000L)) stop("Appendix C requires 1,000 valid replications.")
   if ("failed" %in% names(data) && any(is.na(data$failed) | data$failed != 0)) {
     stop("The archived Appendix C subset must have no failed replications.")
@@ -140,6 +139,7 @@ appendix_validate_summary <- function(summary_data, spec = appendix_plot_spec())
   data$rate_recomputed <- calculated$rate_recomputed
   data$lower_recomputed <- calculated$lower_recomputed
   data$upper_recomputed <- calculated$upper_recomputed
+  # Complete cells have the same full and conditional summaries; verify both if saved.
   summary_columns <- list(
     rate_recomputed = c("rejection_rate", "type1_error_rate",
                         "conditional_rejection_rate"),
@@ -154,7 +154,7 @@ appendix_validate_summary <- function(summary_data, spec = appendix_plot_spec())
                           appendix_check_saved(data, column, calculated[[quantity]]))
     }
   }
-  # Refuse to silently clip an interval against the fixed Appendix C axes.
+  # Fixed axes support comparisons across figures; stop rather than clip an interval.
   if (any(data$upper_recomputed > spec$axis_max[data$method] + 1e-12)) {
     stop("An interval exceeds the fixed Appendix C axis limits; inspect the input.")
   }
@@ -175,8 +175,9 @@ appendix_draw_wilson_figure <- function(data, dimension, covariance, destination
   on.exit(grDevices::dev.off(), add = TRUE)
   colors <- c("#21618C", "#D35420")
   y <- 16 - seq_along(pair_order)
+  # The first five pairs have equal laws; the remaining ten compare different laws.
   row_colors <- colors[ifelse(seq_along(pair_order) <= 5, 1L, 2L)]
-  # Physical panel locations reproduce the original square six-panel layout.
+  # Fixed panel coordinates preserve the original square six-panel layout.
   panel_left <- c(0.061, 0.548)
   panel_right <- c(0.498, 0.986)
   panel_bottom <- c(0.747, 0.456, 0.165)
@@ -187,9 +188,10 @@ appendix_draw_wilson_figure <- function(data, dimension, covariance, destination
     method <- method_order[i]
     panel <- data[data$p == dimension & data$covariance == covariance &
                     data$method == method, , drop = FALSE]
-    # Restore the prescribed row order independently of the CSV row order.
+    # Align estimates, interval bounds, and colors with the prescribed pair order.
     panel <- panel[match(pair_order, panel$pair), , drop = FALSE]
     xmax <- axis_max[method]
+    # LC uses a wider axis; each method retains its scale across all figures.
     ticks <- seq(0, xmax, length.out = if (method == "LC") 5L else 4L)
     par(fig = c(panel_left[column], panel_right[column],
                 panel_bottom[row], panel_top[row]),
@@ -219,7 +221,7 @@ appendix_draw_wilson_figure <- function(data, dimension, covariance, destination
     mtext(sprintf("(%s) %s", letters[i], method_titles[i]), side = 3,
           adj = 0, line = 0.12, cex = 0.96, font = 2)
   }
-  # Separate page-level labels keep all panels the same size.
+  # Place shared labels on a page-wide overlay without shrinking individual panels.
   par(fig = c(0, 1, 0, 1), mar = c(0, 0, 0, 0), new = TRUE,
       xaxs = "i", yaxs = "i")
   plot.new()

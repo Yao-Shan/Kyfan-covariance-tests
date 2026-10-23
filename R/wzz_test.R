@@ -1,10 +1,9 @@
-# WZZ follows the 2022 author manuscript arXiv:2212.12338 (journal article: 2024).
-# Final journal typesetting is unaudited; see reports/h0_comparison.Rmd.
+# WZZ covariance test with three-cumulant chi-square calibration.
+# Source: 2022 author manuscript arXiv:2212.12338 (journal article: 2024).
+# The journal version is unaudited; see reports/h0_comparison.Rmd.
 # Base R; observations are rows and variables are columns.
 
-# Validation, failures and feature-Gram centering ----------------------------
-
-# Coerce observation matrices; stop on invalid dimensions or values.
+# Convert samples to matrices; invalid dimensions or values raise an error.
 .qt_validate <- function(X, Y, min_n = 4L, min_p = 1L) {
   X <- as.matrix(X)
   Y <- as.matrix(Y)
@@ -16,20 +15,18 @@
   list(X = X, Y = Y)
 }
 
-# Failed approximations retain diagnostics and return a missing p-value.
+# Return a missing p-value with the failure status and available diagnostics.
 .qt_fail <- function(status, detail, statistic = NA_real_, ...) {
   c(list(p_value = NA_real_, statistic = statistic, status = status, detail = detail), list(...))
 }
 
-# Double-center a within- or cross-group feature Gram matrix.
+# Center both feature sets in a within- or cross-group Gram matrix.
 .qt_center_gram <- function(K) {
   sweep(sweep(K, 1L, rowMeans(K), "-"), 2L, colMeans(K), "-") + mean(K)
 }
 
-# Trace components in observation space -------------------------------------
-
-# Recover p^2 x p^2 feature-covariance traces from observation-space Gram matrices:
-# vec(xx')'vec(yy') = (x'y)^2.
+# Compute the statistic and feature-covariance traces after sample-mean centering.
+# The identity vec(xx')'vec(yy') = (x'y)^2 avoids forming p^2-by-p^2 matrices.
 .wang_trace_components <- function(X, Y) {
   n1 <- nrow(X)
   n2 <- nrow(Y)
@@ -38,6 +35,7 @@
   K11 <- tcrossprod(X)^2
   K22 <- tcrossprod(Y)^2
   K12 <- tcrossprod(X, Y)^2
+  # Feature covariances use n - 1; cross-group traces need both groups' factors.
   A <- .qt_center_gram(K11)/(n1 - 1)
   D <- .qt_center_gram(K22)/(n2 - 1)
   B <- .qt_center_gram(K12)/sqrt((n1 - 1) * (n2 - 1))
@@ -52,15 +50,14 @@
   )
 }
 
-# Three-cumulant matched shifted/scaled chi-square calibration ---------------
-
-# WZZ three-cumulant chi-square approximation; nonpositive cumulants fail.
+# Match a shifted, scaled chi-square to zero mean and the estimated cumulants.
+# Nonpositive cumulants or invalid matching parameters return a failure record.
 method_wzz <- function(X, Y) {
   xy <- .qt_validate(X, Y, min_n = 4L)
   z <- .wang_trace_components(xy$X, xy$Y)
   n1 <- z$n1
   n2 <- z$n2
-  # Bias-corrected second- and third-order feature covariance trace estimates.
+  # Bias-correct the second- and third-order feature-covariance trace estimates.
   est2 <- function(t1, t2, n) {
     (n - 1)^2/((n - 2) * (n + 1)) * (t2 - t1^2/(n - 1))
   }
@@ -88,7 +85,7 @@ method_wzz <- function(X, Y) {
       statistic = z$statistic, cumulant2 = K2, cumulant3 = K3
     ))
   }
-  # Match the estimated cumulants without truncation or a fallback test.
+  # Match the estimated cumulants without truncation or a fallback calibration.
   beta0 <- -2 * K2^2/K3
   beta1 <- K3/(4 * K2)
   df <- 8 * K2^3/K3^2

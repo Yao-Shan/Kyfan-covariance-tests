@@ -1,6 +1,6 @@
-# Load script and report dependencies independently of the launch directory.
+# Resolve project paths and load workflow dependencies.
 
-# Entries may sit at the root or in simulation/ and reports/.
+# Locate the repository from an entry file in the root, simulation/, or reports/.
 slads_workflow_root <- function(input_path) {
   input_path <- normalizePath(input_path, winslash = "/", mustWork = TRUE)
   if (dir.exists(input_path)) stop("input_path must name an entry file.")
@@ -13,7 +13,7 @@ slads_workflow_root <- function(input_path) {
   normalizePath(root, winslash = "/", mustWork = TRUE)
 }
 
-# Resolve user paths from the repository root; outputs need not exist yet.
+# Resolve relative paths from the repository root, allowing new output paths.
 slads_resolve_path <- function(path, root = .slads_source_root) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
     stop("path must be one nonempty string.")
@@ -23,6 +23,7 @@ slads_resolve_path <- function(path, root = .slads_source_root) {
   normalizePath(path, winslash = "/", mustWork = FALSE)
 }
 
+# List each workflow's dependencies in load order.
 slads_workflow_files <- function(workflow) {
   modules <- switch(workflow,
     tables = c("simulation_core.R", "table_reproduction.R"),
@@ -35,7 +36,7 @@ slads_workflow_files <- function(workflow) {
                    "workflows.R"))
 }
 
-# Load into the caller's environment; pass a fresh one to isolate multiple workflows.
+# Use a separate environment for each workflow to avoid helper-name conflicts.
 slads_load_workflow <- function(workflow, input_path, envir = parent.frame()) {
   input_path <- normalizePath(input_path, winslash = "/", mustWork = TRUE)
   root <- slads_workflow_root(input_path)
@@ -53,7 +54,7 @@ slads_load_workflow <- function(workflow, input_path, envir = parent.frame()) {
   assign(".slads_input_path", input_path, envir = envir)
   assign(".slads_source_root", root, envir = envir)
   assign(".slads_source_files", files, envir = envir)
-  # Track the bootstrap without invoking it again; load execution helpers last.
+  # Hash entrypoint.R as a dependency without sourcing it again.
   source_files <- files[grepl("\\.R$", files) & files != "R/entrypoint.R"]
   for (file in source_files) sys.source(file.path(root, file), envir = envir)
   invisible(envir)

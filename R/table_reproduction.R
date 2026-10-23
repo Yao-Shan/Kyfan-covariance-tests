@@ -1,14 +1,15 @@
-# Archived Table 1--3 values and Ky-Fan runner; load via slads_load_workflow("tables", input_path).
+# Archived table values and Ky-Fan reruns; load via slads_load_workflow("tables", input_path).
 
 pair_levels <- c("N-N", "T-T", "E-E", "G-G", "L-L", "N-T", "N-E", "N-G", "N-L", "T-E", "T-G",
   "T-L", "E-G", "E-L", "G-L")
 
 # Saved values and table formatting
 
-# Scenario/order key for matching independent records without relying on row order.
+# Match records by design and Ky-Fan order, independently of row order.
 archive_key <- function(x) paste(x$p, x$m, x$covariance, x$pair, x$k, sep = ":")
 
-# Validate 1,020 saved cells and rounded MCSEs; archived values never replace a new run.
+# Read 1,020 archived cells and check their keys and rounded MCSEs.
+# Archive mode uses these saved values; reruns generate their own results.
 read_archived_results <- function() {
   archive_path <- file.path(.slads_source_root, "data", "table_archive.csv")
   if (!file.exists(archive_path)) {
@@ -20,6 +21,7 @@ read_archived_results <- function() {
   x$R <- 1000L
   x$B <- 1000L
   x$alpha <- 0.05
+  # Distinguish cells from the completed rerun from historical TeX values.
   x$provenance <- ifelse(
     x$source == "rerun_main_20261006",
     "embedded_completed_rerun_manuscript", "embedded_historical_tex_values"
@@ -30,19 +32,20 @@ read_archived_results <- function() {
     !anyDuplicated(archive_key(x)),
     all(abs(x$mcse - sqrt(x$rejection_rate * (1 - x$rejection_rate) / 1000)) <= 0.00050001)
   )
+  # Recover counts from saved rates; the archive does not contain replicate-level decisions.
   x$rejections <- as.integer(round(x$rejection_rate * x$R))
   x$exchangeable <- substr(x$pair, 1, 1) == substr(x$pair, 3, 3)
   x[order(x$p, x$m, x$k, match(x$pair, pair_levels), x$covariance), ]
 }
 
-# Select the original Table 1--3 design: 180 scenarios and two fixed orders.
+# Select manuscript sample sizes and k = 1, 3; covariance rows pass through.
 select_manuscript <- function(x) {
   x[
     ((x$p == 10 & x$m %in% c(50, 150)) | (x$p == 40 & x$m == 150)) & x$k %in% c(1, 3),
   ]
 }
 
-# Keep manuscript columns and append supplementary covariance designs.
+# Keep C1--C4 first and append any supplementary covariance designs.
 format_paper_table <- function(x, p, m, k) {
   z <- x[x$p == p & x$m == m & x$k == k, ]
   out <- data.frame(Pair = pair_levels, check.names = FALSE)
@@ -50,7 +53,7 @@ format_paper_table <- function(x, p, m, k) {
   for (cv in covariances) {
     zz <- z[z$covariance == cv, ]
     ii <- match(pair_levels, zz$pair)
-    # A partial rerun leaves absent scenarios visible instead of filling from the archive.
+    # Mark missing scenarios explicitly so partial reruns cannot inherit archived values.
     out[[cv]] <- ifelse(
       is.na(ii), "—", sprintf("%.3f (%.3f)", zz$rejection_rate[ii], zz$mcse[ii])
     )
@@ -58,7 +61,7 @@ format_paper_table <- function(x, p, m, k) {
   out
 }
 
-# Write table bodies from supplied results without modifying manuscript sources.
+# Write a separate TeX table file from the supplied results.
 write_paper_tex <- function(x, file) {
   grids <- unique(x[c("p", "m", "k")])
   out <- character()
@@ -89,7 +92,7 @@ write_paper_tex <- function(x, file) {
 
 # Scenario design, simulation and output
 
-# Build manuscript, archive, or diagnostic grids; each scenario shares draws across orders.
+# Build manuscript, archive, or diagnostic grids independently of saved results.
 slads_grid <- function(profile = c("manuscript", "archive", "smoke", "spectral")) {
   profile <- match.arg(profile)
   if (profile == "smoke") {
@@ -97,12 +100,11 @@ slads_grid <- function(profile = c("manuscript", "archive", "smoke", "spectral")
       "N-T", "E-E", "N-L"), stringsAsFactors = FALSE)
     g$ks <- "1,3"
   } else if (profile == "spectral") {
-    # Distinct supplementary designs: H0 is retained in every case.
+    # Supplementary dimensions and spectra still use the same covariance for both samples.
     g <- data.frame(p = c(100L, 100L, 500L, 500L), m = 100L, covariance = c("SPIKE10",
       "SPIKE10", "C1", "C1"), pair = c("N-N", "L-L", "N-N", "L-L"), ks = "1,3", stringsAsFactors = FALSE)
   } else {
-    # The scenario design is explicit and does not depend on archived results.
-    # Retain the historical p/m, pair, covariance ordering and requested orders.
+    # Preserve the historical sample sizes, design order, and requested Ky-Fan orders.
     sizes <- data.frame(
       p = c(10L, 10L, 20L, 20L, 40L, 40L),
       m = c(50L, 150L, 50L, 150L, 50L, 150L),
@@ -113,7 +115,7 @@ slads_grid <- function(profile = c("manuscript", "archive", "smoke", "spectral")
       sizes <- sizes[c(1L, 2L, 6L), , drop = FALSE]
       sizes$ks <- "1,3"
     }
-    # Each scenario shares its generated data and permutations across all orders.
+    # Store orders together so a scenario shares data and permutations across all k values.
     g <- do.call(rbind, lapply(seq_len(nrow(sizes)), function(i) {
       combinations <- expand.grid(covariance = paste0("C", 1:4), pair = pair_levels,
         stringsAsFactors = FALSE)
@@ -141,7 +143,7 @@ slads_code_hash <- function() {
 }
 
 slads_write_rds <- function(x, path) {
-  # Commit only after serialization finishes, keeping the previous checkpoint intact.
+  # Rename only after serialization finishes so an interrupted write preserves the old checkpoint.
   temp <- paste0(path, ".tmp-", Sys.getpid())
   saveRDS(x, temp)
   if (!file.rename(temp, path))
@@ -149,7 +151,7 @@ slads_write_rds <- function(x, path) {
 }
 
 slads_wilson <- function(s, n, level = 0.95) {
-  # Binomial interval for s rejections among n valid repetitions.
+  # Use valid repetitions as the binomial denominator; no valid trials gives missing bounds.
   if (n < 1L)
     return(c(NA_real_, NA_real_))
   z <- qnorm(1 - (1 - level) / 2)
@@ -160,11 +162,12 @@ slads_wilson <- function(s, n, level = 0.95) {
   c(max(0, mid - half), min(1, mid + half))
 }
 
-# Aggregate per-repetition decisions and retain computation status counts.
+# Rates, MCSEs, and intervals condition on valid evaluations in the supplied rows.
+# Unlike the comparison runner, this summary does not require a complete cell.
 slads_summary <- function(raw, alpha = 0.05) {
   groups <- split(raw, interaction(raw$scenario, raw$method, drop = TRUE, lex.order = TRUE))
   result <- lapply(groups, function(d) {
-    # Failures and inapplicable methods remain counted but do not enter the rate.
+    # Retain excluded evaluations in the status counts, not in the rate denominator.
     ok <- d$status == "ok" & !is.na(d$reject)
     n <- sum(ok)
     s <- sum(d$reject[ok])
@@ -182,11 +185,10 @@ slads_summary <- function(raw, alpha = 0.05) {
   do.call(rbind, result)
 }
 
-# Run Ky-Fan with deterministic streams and checkpoints; R/B count repetitions/permutations.
+# Run Ky-Fan tables with R sample pairs per scenario and B permutations per pair.
 slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L,
                       workers = 1L, output_root = "outputs", resume = TRUE,
                       checkpoint_every = 10L, protected_paths = character()) {
-  # This runner produces KyFan tables; method comparisons are in reports/h0_comparison.Rmd.
   stopifnot(R >= 1L, R == as.integer(R), length(B) == 1L, is.finite(B),
     B >= 19L, B == as.integer(B), alpha > 0, alpha < 1)
   # Avoid nested BLAS/OpenMP parallelism inside the scenario workers.
@@ -198,6 +200,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
     RhpcBLASctl::blas_set_num_threads(1L)
     RhpcBLASctl::omp_set_num_threads(1L)
   }
+  # Sources and scientific settings determine the run directory; worker count is excluded.
   config <- list(
     grid = grid, R = R, B = B, alpha = alpha, seed = seed, code_hash = slads_code_hash(),
     R_version = as.character(getRversion()),
@@ -205,7 +208,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
   )
   run_id <- paste0("reproduce_", substr(slads_hash(config), 1, 12))
   outdir <- file.path(output_root, run_id)
-  # A fixed reference must not be an output that this same run can overwrite.
+  # Keep the fixed comparison reference outside this run directory to prevent overwriting it.
   if (length(protected_paths)) {
     protected <- vapply(protected_paths, normalizePath, character(1),
       winslash = "/", mustWork = TRUE)
@@ -219,7 +222,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
   slads_snapshot_sources(outdir, .slads_input_path)
   saveRDS(config, file.path(outdir, "configuration.rds"))
   writeLines(capture.output(str(config)), file.path(outdir, "configuration.txt"))
-  # Each scenario owns a checkpoint containing its completed replicate rows.
+  # Resume each scenario from its saved rows in the configuration-specific run directory.
   one_scenario <- function(i) {
     g <- grid[i, , drop = FALSE]
     file <- file.path(outdir, paste0(g$scenario, ".rds"))
@@ -230,7 +233,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
     ks <- unique(as.numeric(strsplit(g$ks, ",", fixed = TRUE)[[1]]))
     if (length(done) < R) {
       for (r in seq.int(length(done) + 1L, R)) {
-        # Separate data and permutation streams make execution order irrelevant.
+        # Scenario/repetition seeds reproduce both streams after resuming or reordering work.
         slads_set_seed(slads_seed(seed, g$scenario, r, "data"))
         X <- slads_draw(g$m, g$law_x, root)
         Y <- slads_draw(g$m, g$law_y, root)
@@ -264,7 +267,7 @@ slads_run <- function(grid, R = 1000L, B = 1000L, alpha = 0.05, seed = 20260925L
     warning("Windows uses serial execution; set workers=1.")
     workers <- 1L
   }
-  # Each replicate sets its own seed; fork workers must not replace those streams.
+  # Explicit replicate seeds provide reproducibility without fork-assigned RNG streams.
   all <- if (workers > 1L) {
     parallel::mclapply(
       seq_len(nrow(grid)), one_scenario,

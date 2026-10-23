@@ -1,12 +1,13 @@
-# Shared input checks and CLX/CZZW covariance-entry products.
+# Shared LC/CLX/CZZW validation and CLX/CZZW covariance-entry products.
 # Observations are rows and variables are columns.
 
-# Failed tests return missing p-values and statistics, never rejection decisions.
+# Preserve failure diagnostics with missing p-values and statistics.
 .slads_entry_failure <- function(status, detail) {
   list(p_value = NA_real_, statistic = NA_real_, status = status, detail = detail)
 }
 
-# Validate dimensions and finite observations; return NULL or a failure record.
+# Require finite numeric matrices with matching column counts; sample sizes may differ.
+# Return NULL on success or a failure record on invalid input.
 .slads_entry_validate <- function(X, Y, min_n = 4L, min_p = 1L) {
   if (!is.matrix(X) || !is.matrix(Y) || !is.numeric(X) || !is.numeric(Y))
     return(.slads_entry_failure("invalid_input", "X and Y must be numeric matrices."))
@@ -18,8 +19,8 @@
   NULL
 }
 
-# Upper-triangle covariance products include the diagonal and use 1/n,
-# as required by CLX/CZZW, rather than cov()'s 1/(n-1); invalid entry variances fail.
+# Standardize upper-triangle covariance differences, including the diagonal.
+# CLX/CZZW covariances use 1/n; cov() uses 1/(n - 1).
 .slads_entry_products <- function(X, Y) {
   p <- ncol(X)
   n1 <- nrow(X)
@@ -33,7 +34,9 @@
   sy <- colMeans(V)
   U <- sweep(U, 2L, sx, "-")
   V <- sweep(V, 2L, sy, "-")
+  # Each centered product variance also uses 1/n, then is divided by sample size.
   denominator <- colMeans(U * U)/n1 + colMeans(V * V)/n2
+  # A single invalid entry variance fails the test; entries are never dropped.
   if (any(!is.finite(denominator)) || any(denominator <= 0))
     return(.slads_entry_failure(
       "invalid_entry_variance",
